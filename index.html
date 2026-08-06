@@ -1187,7 +1187,10 @@
       try {
         const response = await fetch(`${SUPABASE_URL}/functions/v1/create-order`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6cWJzY3FhZ3JpbGV3c3ZqbGhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU2NzQsImV4cCI6MjEwMTQyMTY3NH0.23JbSN-avTHHm-dpA3lfkdliKIDOZNAwvsUexre4ufE"
+          },
         });
         const data = await response.json();
         if (data.error) {
@@ -1211,7 +1214,10 @@
       try {
         const response = await fetch(`${SUPABASE_URL}/functions/v1/check-order-status`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6cWJzY3FhZ3JpbGV3c3ZqbGhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU2NzQsImV4cCI6MjEwMTQyMTY3NH0.23JbSN-avTHHm-dpA3lfkdliKIDOZNAwvsUexre4ufE"
+          },
           body: JSON.stringify({ orderId: currentOrderId }),
         });
         const data = await response.json();
@@ -1262,7 +1268,6 @@
     let isRedirecting = false;
     
     function updateCountdownTimer() {
-        // ADDED: Pause timer if payment overlay is open
         if (payPage && payPage.classList.contains('active')) return;
 
         if (isRedirecting) return;
