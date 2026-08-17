@@ -1073,7 +1073,7 @@
   // 1. Force price to ₹5 everywhere
   document.addEventListener("DOMContentLoaded", () => {
     const prices = document.querySelectorAll(".price-new, #dynamicPrice");
-    prices.forEach(p => p.textContent = "₹5");
+    prices.forEach(p => p.textContent = "₹1");
   });
 
   // 2. Offer Countdown Timer (10s) & Page Looping - FIXED to resume on close
@@ -1173,7 +1173,7 @@
       const fetchPromise = fetch("/.netlify/functions/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 5 }) 
+        body: JSON.stringify({ amount: 1 }) 
       });
       // 1-second smooth delay so the UI displays naturally
       const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); 
