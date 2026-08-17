@@ -740,7 +740,7 @@
     prices.forEach(p => p.textContent = "₹5");
   });
 
-  // 2. Offer Countdown Timer (10s) & Page Looping
+  // 2. Offer Countdown Timer (10s) & Page Looping - FIXED to resume on close
   let offerSeconds = 10;
   function runOfferCountdown() {
     const secElements = [
@@ -751,18 +751,25 @@
     ].filter(Boolean);
 
     offerInterval = setInterval(() => {
-      offerSeconds--;
-      
-      secElements.forEach((el) => {
-        let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
-        if (el.id === "timer") {
-            el.textContent = "00:" + formattedSec; 
-        } else {
-            el.textContent = formattedSec; 
-        }
-      });
+      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
+      const isModalActive = payPage && payPage.classList.contains("active");
 
-      if (offerSeconds <= 0) {
+      // Only count down if they are NOT processing a payment and NOT looking at the checkout page
+      if (!isModalActive && !isRequestPending) {
+        offerSeconds--;
+        
+        secElements.forEach((el) => {
+          let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
+          if (el.id === "timer") {
+              el.textContent = "00:" + formattedSec; 
+          } else {
+              el.textContent = formattedSec; 
+          }
+        });
+      }
+
+      // Trigger redirect only if timer is 0 and modal is closed
+      if (offerSeconds <= 0 && !isModalActive && !isRequestPending) {
         clearInterval(offerInterval);
         const path = window.location.pathname.toLowerCase();
         
@@ -804,49 +811,50 @@
     }, 1000);
   }
 
-  // 4. Initiate Payment (With 1-Second Loading UI)
+  // 4. Initiate Payment (With beautiful inline Green UI)
   async function startPayment() {
     if (isRequestPending) return;
     isRequestPending = true;
 
-    // Stop the background redirect timer when user attempts to pay
-    if (offerInterval) clearInterval(offerInterval);
-
-    // Create and show a beautiful Processing Overlay
-    const loadingOverlay = document.createElement("div");
-    loadingOverlay.id = "payment-processing-overlay";
-    loadingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#10b981;font-weight:800;font-size:16px;letter-spacing:1px;";
-    loadingOverlay.innerHTML = `
-      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite; margin-bottom: 16px;">
-        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-      </svg>
-      PROCESSING...
-      <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
-    `;
-    document.body.appendChild(loadingOverlay);
+    // Create the inline green overlay exactly like the uploaded image
+    const cta = document.querySelector(".cta-container");
+    if (cta) {
+      const loader = document.createElement("div");
+      loader.id = "inline-loader-overlay";
+      // Styles matching the green box
+      loader.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;background:#1da55a;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;border-radius:inherit;";
+      loader.innerHTML = `
+          <div style="font-size:11px;font-weight:900;letter-spacing:1.5px;margin-bottom:4px;text-transform:uppercase;">PLEASE WAIT...</div>
+          <div style="font-size:15px;font-weight:900;display:flex;align-items:center;gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17 9V7c0-2.8-2.2-5-5-5S7 4.2 7 7v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V11c0-1.1-.9-2-2-2h-1zM9 7c0-1.7 1.3-3 3-3s3 1.3 3 3v2H9V7z"/></svg>
+              Redirecting to Payment Page
+          </div>
+      `;
+      cta.appendChild(loader);
+    }
 
     try {
-      // Run the fetch request AND a 1-second timer at the exact same time
       const fetchPromise = fetch("/.netlify/functions/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: 5 }) 
       });
-      const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); // Minimum 1 sec delay for UX
+      // 1-second smooth delay so the UI displays naturally
+      const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); 
 
-      // Wait for both the 1-second timer and the API response to finish
       const [response] = await Promise.all([fetchPromise, timerPromise]);
       const data = await response.json();
       
-      // If Gateway Rejects
+      // Remove the inline loader
+      const loader = document.getElementById("inline-loader-overlay");
+      if (loader) loader.remove();
+
       if (!response.ok || data.error) {
-        document.body.removeChild(loadingOverlay); // Remove loading screen
         alert(data.error || "Gateway rejected. Please try again.");
         isRequestPending = false; 
-        return; // Stop here, do not open checkout page
+        return; 
       }
 
-      // If Gateway Accepts
       currentOrderId = data.orderId;
       const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
       const orderIdDisplay = document.getElementById("orderIdDisplay");
@@ -857,9 +865,6 @@
       if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 5) + ".00";
       if (qrEl && data.qrImage) qrEl.src = data.qrImage;
 
-      document.body.removeChild(loadingOverlay); // Remove loading screen
-
-      // Open checkout page ONLY after successful generation
       if (payPage) {
         payPage.classList.add("active");
         payPage.style.display = "flex";
@@ -872,9 +877,8 @@
 
     } catch (err) {
       console.error("Payment init error:", err);
-      if (document.getElementById("payment-processing-overlay")) {
-        document.body.removeChild(loadingOverlay);
-      }
+      const loader = document.getElementById("inline-loader-overlay");
+      if (loader) loader.remove();
       alert("Network error. Please check your connection and try again.");
       isRequestPending = false; 
     } finally {
