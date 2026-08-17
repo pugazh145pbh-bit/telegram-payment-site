@@ -17,27 +17,26 @@ exports.handler = async (event) => {
 
     let qrCodeUrl = "";
 
-    // VyaparGateway API Call
-    try {
-      const response = await fetch("https://api.vyapargateway.com/v1/orders", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.VYAPAR_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          amount: orderAmount,
-          order_id: orderId
-        })
-      });
+    // VyaparGateway Create Order API Call
+    const response = await fetch("https://api.vyapargateway.com/v1/orders", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.VYAPAR_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        amount: orderAmount,
+        order_id: orderId
+      })
+    });
 
-      const data = await response.json();
-      qrCodeUrl = data.qr_code || data.qr_url || data.qr_image || data.upi_qr || "";
-    } catch (apiErr) {
-      console.error("Vyapar API Error:", apiErr);
-    }
+    const data = await response.json();
+    console.log("VyaparGateway Response:", JSON.stringify(data));
 
-    // Save to Supabase
+    // VyaparGateway தரும் QR URL அல்லது Base64 தரவை எடுத்தல்
+    qrCodeUrl = data.qr_url || data.qr_code || data.qr_image || data.upi_qr || (data.data && data.data.qr_url) || "";
+
+    // Supabase Database-ல் சேமித்தல்
     await supabase.from("orders").insert([
       {
         order_id: orderId,
@@ -57,6 +56,7 @@ exports.handler = async (event) => {
       })
     };
   } catch (error) {
+    console.error("Backend Error:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
