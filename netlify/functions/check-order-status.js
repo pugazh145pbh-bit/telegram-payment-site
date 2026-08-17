@@ -13,31 +13,72 @@ exports.handler = async (event) => {
   try {
     const { orderId } = JSON.parse(event.body || "{}");
 
-    if (!orderId) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing orderId" }) };
-    }
-
-    const { data, error } = await supabase
+    // 1. Check in Supabase first
+    const { data: order } = await supabase
       .from("orders")
-      .select("status, telegram_link")
+      .select("*")
       .eq("order_id", orderId)
       .single();
 
-    if (error || !data) {
+    if (order && order.status === "paid") {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "pending" })
+        body: JSON.stringify({
+          status: "paid",
+          telegramLink: order.telegram_link
+        })
+      };
+    }
+
+    // 2. Poll VyaparGateway Status directly
+    const response = await fetch("https://vyapargateway.com/api/v1/check_order_status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: process.env.VYAPAR_API_KEY,
+        order_id: orderId
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.status && data.data && data.data.status === "success") {
+      // Create Telegram Invite Link
+      const tgRes = await fetch(
+        `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createChatInviteLink`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: process.env.TELEGRAM_CHANNEL_ID,
+            member_limit: 1,
+          }),
+        }
+      );
+      const tgData = await tgRes.json();
+      const inviteLink = tgData.result ? tgData.result.invite_link : "";
+
+      // Update Supabase
+      await supabase
+        .from("orders")
+        .update({ status: "paid", telegram_link: inviteLink })
+        .eq("order_id", orderId);
+
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "paid",
+          telegramLink: inviteLink
+        })
       };
     }
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        status: data.status,
-        telegramLink: data.telegram_link
-      })
+      body: JSON.stringify({ status: "pending" })
     };
   } catch (error) {
     return {

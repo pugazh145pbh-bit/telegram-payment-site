@@ -13,33 +13,39 @@ exports.handler = async (event) => {
   try {
     const { amount } = JSON.parse(event.body || "{}");
     const orderAmount = amount || 199;
-    const orderId = "ORD_" + Date.now();
+    const clientTxnId = "TXN_" + Date.now();
 
-    let qrCodeUrl = "";
-
-    // VyaparGateway Create Order API Call
-    const response = await fetch("https://api.vyapargateway.com/v1/orders", {
+    // VyaparGateway Official Create Order Call
+    const response = await fetch("https://vyapargateway.com/api/v1/create_order", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.VYAPAR_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        key: process.env.VYAPAR_API_KEY,
         amount: orderAmount,
-        order_id: orderId
+        client_txn_id: clientTxnId,
+        p_info: "Private Telegram Access"
       })
     });
 
     const data = await response.json();
     console.log("VyaparGateway Response:", JSON.stringify(data));
 
-    // VyaparGateway தரும் QR URL அல்லது Base64 தரவை எடுத்தல்
-    qrCodeUrl = data.qr_url || data.qr_code || data.qr_image || data.upi_qr || (data.data && data.data.qr_url) || "";
+    if (!data.status || !data.data) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: data.msg || "API Error from Gateway" })
+      };
+    }
 
-    // Supabase Database-ல் சேமித்தல்
+    const finalOrderId = data.data.order_id;
+    const qrCodeImage = data.data.qr_code; // Base64 QR Image from Vyapar
+
+    // Save order in Supabase
     await supabase.from("orders").insert([
       {
-        order_id: orderId,
+        order_id: finalOrderId,
         amount: orderAmount,
         status: "pending"
       }
@@ -50,9 +56,9 @@ exports.handler = async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         success: true,
-        orderId: orderId,
+        orderId: finalOrderId,
         amount: orderAmount,
-        qrImage: qrCodeUrl
+        qrImage: qrCodeImage
       })
     };
   } catch (error) {
