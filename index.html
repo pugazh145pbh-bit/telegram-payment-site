@@ -1068,14 +1068,15 @@
   let payTimerInterval = null;
   let pollInterval = null;
   let isRequestPending = false;
+  let offerInterval = null;
 
-  // 1. Update price to 5 across all pages
+  // 1. Force price to ₹5 everywhere
   document.addEventListener("DOMContentLoaded", () => {
     const prices = document.querySelectorAll(".price-new, #dynamicPrice");
     prices.forEach(p => p.textContent = "₹5");
   });
 
-  // 2. Offer Countdown Timer (10 Seconds) & Page Looping
+  // 2. Offer Countdown Timer (10s) & Page Looping
   let offerSeconds = 10;
   function runOfferCountdown() {
     const secElements = [
@@ -1085,7 +1086,7 @@
       document.getElementById("sec")
     ].filter(Boolean);
 
-    const offerInterval = setInterval(() => {
+    offerInterval = setInterval(() => {
       offerSeconds--;
       
       secElements.forEach((el) => {
@@ -1119,6 +1120,8 @@
     let timer = durationSeconds;
     const display = document.getElementById("pay-timer") || document.querySelector(".pay-timer");
 
+    if (display) display.textContent = "2:00"; 
+
     payTimerInterval = setInterval(() => {
       const minutes = Math.floor(timer / 60);
       const seconds = timer % 60;
@@ -1137,35 +1140,62 @@
     }, 1000);
   }
 
-  // 4. Initiate Payment & Open Modal (Amount set to 5)
+  // 4. Initiate Payment (With 1-Second Loading UI)
   async function startPayment() {
     if (isRequestPending) return;
     isRequestPending = true;
 
+    // Stop the background redirect timer when user attempts to pay
+    if (offerInterval) clearInterval(offerInterval);
+
+    // Create and show a beautiful Processing Overlay
+    const loadingOverlay = document.createElement("div");
+    loadingOverlay.id = "payment-processing-overlay";
+    loadingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#10b981;font-weight:800;font-size:16px;letter-spacing:1px;";
+    loadingOverlay.innerHTML = `
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite; margin-bottom: 16px;">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+      </svg>
+      PROCESSING...
+      <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+    `;
+    document.body.appendChild(loadingOverlay);
+
     try {
-      const response = await fetch("/.netlify/functions/create-order", {
+      // Run the fetch request AND a 1-second timer at the exact same time
+      const fetchPromise = fetch("/.netlify/functions/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: 5 }) 
       });
+      const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); // Minimum 1 sec delay for UX
 
+      // Wait for both the 1-second timer and the API response to finish
+      const [response] = await Promise.all([fetchPromise, timerPromise]);
       const data = await response.json();
+      
+      // If Gateway Rejects
       if (!response.ok || data.error) {
-        alert(data.error || "Unable to load payment. Please try again.");
-        return;
+        document.body.removeChild(loadingOverlay); // Remove loading screen
+        alert(data.error || "Gateway rejected. Please try again.");
+        isRequestPending = false; 
+        return; // Stop here, do not open checkout page
       }
 
+      // If Gateway Accepts
       currentOrderId = data.orderId;
+      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
       const orderIdDisplay = document.getElementById("orderIdDisplay");
       const amountDisplay = document.getElementById("amountDisplay");
       const qrEl = document.getElementById("qrImage");
-      
-      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
 
       if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
       if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 5) + ".00";
       if (qrEl && data.qrImage) qrEl.src = data.qrImage;
 
+      document.body.removeChild(loadingOverlay); // Remove loading screen
+
+      // Open checkout page ONLY after successful generation
       if (payPage) {
         payPage.classList.add("active");
         payPage.style.display = "flex";
@@ -1175,9 +1205,14 @@
 
       if (pollInterval) clearInterval(pollInterval);
       pollInterval = setInterval(checkPaymentStatus, 3000);
+
     } catch (err) {
       console.error("Payment init error:", err);
-      alert("Payment failed to initialize. Please check connection.");
+      if (document.getElementById("payment-processing-overlay")) {
+        document.body.removeChild(loadingOverlay);
+      }
+      alert("Network error. Please check your connection and try again.");
+      isRequestPending = false; 
     } finally {
       isRequestPending = false;
     }
@@ -1228,7 +1263,7 @@
     if (pollInterval) clearInterval(pollInterval);
   }
 
-  // 7. Bind All Click Triggers
+  // 7. Bind Click Triggers
   function setupTriggers() {
     const triggers = document.querySelectorAll(
       ".join-btn, .bottom-bar, .cta-button, #joinBtn, .cta-container, #open-payment-page, #ctaSection, #open-pay-slide-3"
