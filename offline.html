@@ -733,16 +733,15 @@
   let pollInterval = null;
   let isRequestPending = false;
 
-  // 1. Force the price to ₹1 everywhere for testing
+  // 1. Update price to 5 across all pages
   document.addEventListener("DOMContentLoaded", () => {
     const prices = document.querySelectorAll(".price-new, #dynamicPrice");
-    prices.forEach(p => p.textContent = "₹1");
+    prices.forEach(p => p.textContent = "₹5");
   });
 
   // 2. Offer Countdown Timer (10 Seconds) & Page Looping
   let offerSeconds = 10;
   function runOfferCountdown() {
-    // Targets all the different timer IDs across index, page2, and offline
     const secElements = [
       document.getElementById("timer"),      
       document.getElementById("secs"),       
@@ -755,7 +754,6 @@
       
       secElements.forEach((el) => {
         let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
-        // Keep the 00:00 format for index.html, use raw seconds for others
         if (el.id === "timer") {
             el.textContent = "00:" + formattedSec; 
         } else {
@@ -767,7 +765,6 @@
         clearInterval(offerInterval);
         const path = window.location.pathname.toLowerCase();
         
-        // Continuous 10-second loop: index -> page2 -> offline -> index
         if (path.includes("offline")) {
           window.location.href = "index.html"; 
         } else if (path.includes("page2")) {
@@ -804,7 +801,7 @@
     }, 1000);
   }
 
-  // 4. Initiate Payment & Open Modal (Fixed IDs)
+  // 4. Initiate Payment & Open Modal (Amount set to 5)
   async function startPayment() {
     if (isRequestPending) return;
     isRequestPending = true;
@@ -813,7 +810,7 @@
       const response = await fetch("/.netlify/functions/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 1 })
+        body: JSON.stringify({ amount: 5 }) 
       });
 
       const data = await response.json();
@@ -827,11 +824,10 @@
       const amountDisplay = document.getElementById("amountDisplay");
       const qrEl = document.getElementById("qrImage");
       
-      // FIXED: Targets correct modal ID "payment-page"
       const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
 
       if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
-      if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 1) + ".00";
+      if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 5) + ".00";
       if (qrEl && data.qrImage) qrEl.src = data.qrImage;
 
       if (payPage) {
@@ -874,7 +870,6 @@
           `;
         }
         
-        // Also show the hidden join button if it exists
         const tgBtn = document.getElementById("telegramJoinBtn");
         if(tgBtn) {
             tgBtn.href = data.telegramLink;
@@ -886,7 +881,7 @@
     }
   }
 
-  // 6. Close Modal Function (Fixed IDs)
+  // 6. Close Modal Function
   function closePayment() {
     const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
     if (payPage) {
@@ -897,7 +892,7 @@
     if (pollInterval) clearInterval(pollInterval);
   }
 
-  // 7. Bind All Click Triggers (Added missing container IDs)
+  // 7. Bind All Click Triggers
   function setupTriggers() {
     const triggers = document.querySelectorAll(
       ".join-btn, .bottom-bar, .cta-button, #joinBtn, .cta-container, #open-payment-page, #ctaSection, #open-pay-slide-3"
@@ -909,7 +904,6 @@
       };
     });
 
-    // FIXED: Target correct close button ID
     const closeBtn = document.getElementById("close-pay-btn") || document.querySelector(".close-pay-page");
     if (closeBtn) {
       closeBtn.onclick = (e) => {

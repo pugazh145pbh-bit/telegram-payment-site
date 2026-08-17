@@ -12,7 +12,8 @@ exports.handler = async (event) => {
 
   try {
     const { amount } = JSON.parse(event.body || "{}");
-    const orderAmount = Number(amount) || 1;
+    // Amount set to 5 for testing
+    const orderAmount = Number(amount) || 5;
 
     const userNumericId = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000);
     const clientTxnId = "TXN_" + userNumericId;
