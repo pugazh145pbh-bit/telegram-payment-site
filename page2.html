@@ -236,7 +236,6 @@
     .btn-join { background-color: transparent; color: var(--green-accent); border: 1px solid var(--green-accent); height: 36px; border-radius: 18px; font-size: 14px; font-weight: 700; padding: 0 16px; display: flex; align-items: center; gap: 6px; position: relative; overflow: hidden; cursor: pointer; flex-shrink: 0;}
     .btn-join svg { fill: var(--green-accent); width: 20px; height: 20px;}
 
-    /* PERFECT ALIGNMENT: 16px edges, 16px padding, 16px curve */
     .chat-container { 
         position: relative; 
         z-index: 1; 
@@ -277,14 +276,12 @@
     .slider-container { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 16px; scrollbar-width: none; }
     .slider-container::-webkit-scrollbar { display: none; }
     
-    /* PERFECT ALIGNMENT: 16px curves */
     .preview-card { flex: 0 0 auto; width: 140px; height: 220px; background-color: #222; border-radius: 16px; scroll-snap-align: start; position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 12px; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.05); }
     .preview-card img.slide-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
     .card-gradient-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 60%); z-index: 2; }
     .hd-badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.6); font-size: 9px; padding: 2px 4px; border-radius: 4px; font-weight: bold; z-index: 3;}
     .card-title { font-size: 12px; font-weight: bold; margin-bottom: 4px; z-index: 3; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
     
-    /* PERFECT ALIGNMENT: 16px curves */
     .unlocked-card { 
         position: relative; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; 
         text-align: center; border: none; padding: 16px; cursor: pointer; z-index: 1; overflow: hidden; border-radius: 16px; 
@@ -304,7 +301,6 @@
     .unlocked-title { font-size: 14px; font-weight: 700; color: #ffffff; line-height: 1.3; z-index: 3; letter-spacing: 0.3px;}
     .unlocked-subtitle { font-size: 10px; color: var(--green-accent); margin-top: 8px; font-weight: 800; letter-spacing: 1px; z-index: 3; text-transform: uppercase;}
 
-    /* PERFECT ALIGNMENT: 16px edges, 16px padding, 16px curve */
     .info-cards-container { 
         display: flex; 
         gap: 12px; 
@@ -323,7 +319,6 @@
     .info-text-top-orange { font-size: 10px; color: #fdba74; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
     .info-text-sub-orange { font-size: 12px; color: #ffffff; font-weight: 800; line-height: 1.2; }
 
-    /* EXACT OFFLINE MATCH CSS - FADING GRADIENT MASK ADDED */
     .fixed-bottom-section {
         position: fixed; 
         bottom: 0; 
@@ -332,7 +327,7 @@
         width: 100%; 
         max-width: 414px; 
         z-index: 100; 
-        background: linear-gradient(to bottom, transparent 0%, transparent 20px, #010101 40px); /* Fading mask applied here */
+        background: linear-gradient(to bottom, transparent 0%, transparent 20px, #010101 40px);
         padding-top: 20px; 
         padding-bottom: 16px; 
         pointer-events: none; 
@@ -342,7 +337,6 @@
         pointer-events: auto; 
     }
 
-    /* PERFECT ALIGNMENT: 16px edges exactly matches the cards above it */
     .cta-wrapper {
         position: relative;
         margin: 0 16px 12px 16px; 
@@ -473,7 +467,6 @@
 
     .redirect-maintext svg { width: 18px; height: 18px; fill: white; }
 
-    /* PERFECT ALIGNMENT: 16px edges exactly matches everything */
     .payments {
         background: rgba(17, 17, 17, 0.6);
         margin: 0 16px 12px 16px;
@@ -715,7 +708,7 @@
             <h2 class="pay-title">Scan to Pay</h2>
             
             <div class="qr-code-box">
-                <img class="smart-img" id="qrImage" src="image_54329c.png" data-basenames="image_54329c.png,qrcode.PNG.png,qrcode.png" alt="QR Code Scanner">
+                <img class="smart-img" id="qrImage" src="qrcode.PNG.png" alt="QR Code Scanner">
             </div>
             
             <div class="pay-details">
@@ -955,7 +948,6 @@
     const ctaObserveEl = document.getElementById('open-payment-page');
     if (ctaObserveEl) observer.observe(ctaObserveEl);
 
-
     const openModalBtn = document.getElementById('open-join-modal');
     const modalOverlay = document.getElementById('join-modal-overlay');
     const closeModalBtn = document.getElementById('close-modal-btn');
@@ -976,29 +968,39 @@
     const payTimerEl = document.getElementById('pay-timer');
     let payTimerInterval;
 
-    const SUPABASE_URL = "https://wzqbscqagrilewsvjlhq.supabase.co";
     let currentOrderId = null;
     let pollInterval = null;
 
     async function startPayment() {
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/create-order`, {
+        const response = await fetch("/.netlify/functions/create-order", {
           method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6cWJzY3FhZ3JpbGV3c3ZqbGhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU2NzQsImV4cCI6MjEwMTQyMTY3NH0.23JbSN-avTHHm-dpA3lfkdliKIDOZNAwvsUexre4ufE"
-          },
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: 199 })
         });
+        
         const data = await response.json();
-        if (data.error) {
+        if (!response.ok || data.error) {
           alert("Something went wrong. Please try again.");
           return;
         }
-        currentOrderId = data.orderId;
-        document.getElementById("orderIdDisplay").textContent = data.orderId;
-        document.getElementById("amountDisplay").textContent = "₹" + data.amount;
-        document.getElementById("qrImage").src = "data:image/png;base64," + data.qrImage;
-        payPage.classList.add("active");
+        
+        currentOrderId = data.orderId || data.order_id;
+        const orderIdDisplay = document.getElementById("orderIdDisplay");
+        const amountDisplay = document.getElementById("amountDisplay");
+        const qrEl = document.getElementById("qrImage");
+
+        if (orderIdDisplay) orderIdDisplay.textContent = currentOrderId;
+        if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 199) + ".00";
+        if (qrEl) {
+          if (data.qrImage) {
+            qrEl.src = data.qrImage.startsWith("data:") ? data.qrImage : "data:image/png;base64," + data.qrImage;
+          } else {
+            qrEl.src = "qrcode.PNG.png";
+          }
+        }
+        
+        if (payPage) payPage.classList.add("active");
         pollInterval = setInterval(checkPaymentStatus, 3000);
       } catch (err) {
         console.error("Error creating order:", err);
@@ -1009,18 +1011,15 @@
     async function checkPaymentStatus() {
       if (!currentOrderId) return;
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/check-order-status`, {
+        const response = await fetch("/.netlify/functions/check-order-status", {
           method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6cWJzY3FhZ3JpbGV3c3ZqbGhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU2NzQsImV4cCI6MjEwMTQyMTY3NH0.23JbSN-avTHHm-dpA3lfkdliKIDOZNAwvsUexre4ufE"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ orderId: currentOrderId }),
         });
         const data = await response.json();
-        if (data.status === "paid") {
+        if (data.status === "paid" || data.status === "SUCCESS") {
           clearInterval(pollInterval);
-          showTelegramLink(data.telegramLink);
+          showTelegramLink(data.telegramLink || data.invite_link);
         } else if (data.status === "failed") {
           clearInterval(pollInterval);
           alert("Payment failed. Please try again.");
@@ -1032,9 +1031,11 @@
 
     function showTelegramLink(link) {
       const joinBtn = document.getElementById("telegramJoinBtn");
-      joinBtn.href = link;
-      joinBtn.style.display = "block";
-      joinBtn.textContent = "✅ Payment Confirmed — Join Telegram";
+      if (joinBtn) {
+        joinBtn.href = link;
+        joinBtn.style.display = "block";
+        joinBtn.textContent = "✅ Payment Confirmed — Join Telegram";
+      }
     }
 
     if (openPay) openPay.addEventListener('click', startPayment);

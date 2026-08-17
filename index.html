@@ -797,7 +797,6 @@
     <canvas id="gradient"></canvas>
     
     <div class="cover-area" id="videoCover">
-        <!-- New wrapper allows the bottom border clip without cutting off the custom badge -->
         <div class="cover-bg-wrapper">
             <img class="smart-img cover-bg-img" src="bg-image.jpg.jpeg" data-basenames="bg-image.jpg.jpeg,bg-image.jpg.jpg,bg-image.jpg,bg-image.jpeg" alt="Cover BG">
         </div>
@@ -978,7 +977,7 @@
             <h2 class="pay-title">Scan to Pay</h2>
             
             <div class="qr-code-box">
-                <img class="smart-img" id="qrImage" src="image_54329c.png" data-basenames="image_54329c.png,qrcode.PNG.png,qrcode.png" alt="QR Code Scanner">
+                <img class="smart-img" id="qrImage" src="qrcode.PNG.png" alt="QR Code Scanner">
             </div>
 
             <div class="pay-details">
@@ -1178,30 +1177,39 @@
     const payTimerEl = document.getElementById('pay-timer');
     let payTimerInterval;
 
-    // Supabase Integration variables
-    const SUPABASE_URL = "https://wzqbscqagrilewsvjlhq.supabase.co";
     let currentOrderId = null;
     let pollInterval = null;
 
     async function startPayment() {
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/create-order`, {
+        const response = await fetch("/.netlify/functions/create-order", {
           method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6cWJzY3FhZ3JpbGV3c3ZqbGhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU2NzQsImV4cCI6MjEwMTQyMTY3NH0.23JbSN-avTHHm-dpA3lfkdliKIDOZNAwvsUexre4ufE"
-          },
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: 199 })
         });
+        
         const data = await response.json();
-        if (data.error) {
+        if (!response.ok || data.error) {
           alert("Something went wrong. Please try again.");
           return;
         }
-        currentOrderId = data.orderId;
-        document.getElementById("orderIdDisplay").textContent = data.orderId;
-        document.getElementById("amountDisplay").textContent = "₹" + data.amount;
-        document.getElementById("qrImage").src = "data:image/png;base64," + data.qrImage;
-        payPage.classList.add("active");
+        
+        currentOrderId = data.orderId || data.order_id;
+        const orderIdDisplay = document.getElementById("orderIdDisplay");
+        const amountDisplay = document.getElementById("amountDisplay");
+        const qrEl = document.getElementById("qrImage");
+
+        if (orderIdDisplay) orderIdDisplay.textContent = currentOrderId;
+        if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 199) + ".00";
+        if (qrEl) {
+          if (data.qrImage) {
+            qrEl.src = data.qrImage.startsWith("data:") ? data.qrImage : "data:image/png;base64," + data.qrImage;
+          } else {
+            qrEl.src = "qrcode.PNG.png";
+          }
+        }
+        
+        if (payPage) payPage.classList.add("active");
         pollInterval = setInterval(checkPaymentStatus, 3000);
       } catch (err) {
         console.error("Error creating order:", err);
@@ -1212,18 +1220,15 @@
     async function checkPaymentStatus() {
       if (!currentOrderId) return;
       try {
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/check-order-status`, {
+        const response = await fetch("/.netlify/functions/check-order-status", {
           method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6cWJzY3FhZ3JpbGV3c3ZqbGhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NDU2NzQsImV4cCI6MjEwMTQyMTY3NH0.23JbSN-avTHHm-dpA3lfkdliKIDOZNAwvsUexre4ufE"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ orderId: currentOrderId }),
         });
         const data = await response.json();
-        if (data.status === "paid") {
+        if (data.status === "paid" || data.status === "SUCCESS") {
           clearInterval(pollInterval);
-          showTelegramLink(data.telegramLink);
+          showTelegramLink(data.telegramLink || data.invite_link);
         } else if (data.status === "failed") {
           clearInterval(pollInterval);
           alert("Payment failed. Please try again.");
@@ -1235,9 +1240,11 @@
 
     function showTelegramLink(link) {
       const joinBtn = document.getElementById("telegramJoinBtn");
-      joinBtn.href = link;
-      joinBtn.style.display = "block";
-      joinBtn.textContent = "✅ Payment Confirmed — Join Telegram";
+      if (joinBtn) {
+        joinBtn.href = link;
+        joinBtn.style.display = "block";
+        joinBtn.textContent = "✅ Payment Confirmed — Join Telegram";
+      }
     }
 
     if (ctaSection) {
@@ -1248,7 +1255,7 @@
         closePay.addEventListener('click', () => {
             if (payPage) payPage.classList.remove('active');
             clearInterval(payTimerInterval);
-            if (pollInterval) clearInterval(pollInterval); // Stop polling when closed
+            if (pollInterval) clearInterval(pollInterval);
         });
     }
 
