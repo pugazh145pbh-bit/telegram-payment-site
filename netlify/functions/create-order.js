@@ -15,27 +15,32 @@ exports.handler = async (event) => {
     const orderAmount = amount || 199;
     const orderId = "ORD_" + Date.now();
 
-    // VyaparGateway API
-    const response = await fetch("https://api.vyapargateway.com/v1/orders", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.VYAPAR_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        amount: orderAmount,
-        order_id: orderId
-      })
-    });
+    let qrCodeUrl = "";
 
-    const data = await response.json();
-    const finalOrderId = data.id || orderId;
-    const qrUrl = data.qr_url || data.qr_image || "";
+    // VyaparGateway API Call
+    try {
+      const response = await fetch("https://api.vyapargateway.com/v1/orders", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.VYAPAR_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          amount: orderAmount,
+          order_id: orderId
+        })
+      });
 
-    // Save order in Supabase
+      const data = await response.json();
+      qrCodeUrl = data.qr_code || data.qr_url || data.qr_image || data.upi_qr || "";
+    } catch (apiErr) {
+      console.error("Vyapar API Error:", apiErr);
+    }
+
+    // Save to Supabase
     await supabase.from("orders").insert([
       {
-        order_id: finalOrderId,
+        order_id: orderId,
         amount: orderAmount,
         status: "pending"
       }
@@ -46,9 +51,9 @@ exports.handler = async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         success: true,
-        orderId: finalOrderId,
+        orderId: orderId,
         amount: orderAmount,
-        qrImage: qrUrl
+        qrImage: qrCodeUrl
       })
     };
   } catch (error) {
