@@ -17,7 +17,6 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing orderId" }) };
     }
 
-    // 1. Check if already marked as paid in Supabase
     const { data: order } = await supabase
       .from("orders")
       .select("*")
@@ -35,7 +34,6 @@ exports.handler = async (event) => {
       };
     }
 
-    // 2. Poll VyaparGateway Status
     const response = await fetch("https://vyapargateway.com/api/v1/check_order_status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -48,7 +46,6 @@ exports.handler = async (event) => {
     const data = await response.json();
 
     if (data.status && data.data && data.data.status === "success") {
-      // Create Single-use Telegram Invite Link
       const tgRes = await fetch(
         `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createChatInviteLink`,
         {
@@ -63,7 +60,6 @@ exports.handler = async (event) => {
       const tgData = await tgRes.json();
       const inviteLink = tgData.result ? tgData.result.invite_link : "";
 
-      // Update Supabase
       await supabase
         .from("orders")
         .update({ status: "paid", telegram_link: inviteLink })

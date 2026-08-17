@@ -12,10 +12,8 @@ exports.handler = async (event) => {
 
   try {
     const { amount } = JSON.parse(event.body || "{}");
-    // Test price set to 1 (Change to 199 later)
     const orderAmount = Number(amount) || 1;
 
-    // Generate clean numeric ID for display & unique client transaction ID
     const userNumericId = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000);
     const clientTxnId = "TXN_" + userNumericId;
 
@@ -39,14 +37,13 @@ exports.handler = async (event) => {
       return {
         statusCode: 400,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ error: data.msg || "Gateway error" })
+        body: JSON.stringify({ error: data.msg || "Gateway rejected request" })
       };
     }
 
     const finalOrderId = data.data.order_id;
     const qrCodeImage = data.data.qr_code;
 
-    // Save initial order in Supabase
     await supabase.from("orders").upsert([
       {
         order_id: finalOrderId,

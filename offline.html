@@ -733,33 +733,39 @@
   let pollInterval = null;
   let isRequestPending = false;
 
+  // 1. Offer Countdown Timer (10 Seconds)
   let offerSeconds = 10;
-  const secDisplay = document.getElementById("sec");
-  const mainPrice = document.querySelector(".main-price") || document.querySelector(".price-now");
+  function runOfferCountdown() {
+    const secElements = [
+      document.getElementById("sec"),
+      document.querySelector(".sec"),
+      document.querySelector(".timer-sec")
+    ].filter(Boolean);
 
-  function runOfferTimer() {
     const offerInterval = setInterval(() => {
       offerSeconds--;
-      if (secDisplay) {
-        secDisplay.textContent = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
-      }
+      secElements.forEach((el) => {
+        el.textContent = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
+      });
+
       if (offerSeconds <= 0) {
         clearInterval(offerInterval);
-        const currentPage = window.location.pathname;
-        if (currentPage.includes("index") || currentPage === "/") {
+        const path = window.location.pathname;
+        if (path.includes("index") || path === "/" || path.endsWith("/")) {
           window.location.href = "page2.html";
-        } else if (currentPage.includes("page2")) {
+        } else if (path.includes("page2")) {
           window.location.href = "offline.html";
         }
       }
     }, 1000);
   }
-  runOfferTimer();
+  runOfferCountdown();
 
+  // 2. Checkout Modal 2-Minute Timer
   function startPayTimer(durationSeconds) {
     clearInterval(payTimerInterval);
     let timer = durationSeconds;
-    const display = document.getElementById("pay-timer");
+    const display = document.getElementById("pay-timer") || document.querySelector(".pay-timer");
 
     payTimerInterval = setInterval(() => {
       const minutes = Math.floor(timer / 60);
@@ -773,13 +779,13 @@
         if (display) display.textContent = "0:00 - Expired";
 
         setTimeout(() => {
-          const payPage = document.getElementById("pay-page");
-          if (payPage) payPage.classList.remove("active");
-        }, 1500);
+          closePayment();
+        }, 1200);
       }
     }, 1000);
   }
 
+  // 3. Initiate Payment & Open Modal
   async function startPayment() {
     if (isRequestPending) return;
     isRequestPending = true;
@@ -793,34 +799,38 @@
 
       const data = await response.json();
       if (!response.ok || data.error) {
-        alert(data.error || "Something went wrong. Please try again.");
+        alert(data.error || "Unable to load payment. Please try again.");
         return;
       }
 
       currentOrderId = data.orderId;
-      const orderIdDisplay = document.getElementById("orderIdDisplay");
-      const amountDisplay = document.getElementById("amountDisplay");
-      const qrEl = document.getElementById("qrImage");
-      const payPage = document.getElementById("pay-page");
+      const orderIdDisplay = document.getElementById("orderIdDisplay") || document.querySelector(".order-id-val");
+      const amountDisplay = document.getElementById("amountDisplay") || document.querySelector(".amount-val");
+      const qrEl = document.getElementById("qrImage") || document.querySelector(".qr-image-src");
+      const payPage = document.getElementById("pay-page") || document.querySelector(".pay-modal-wrapper");
 
       if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
       if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 1) + ".00";
       if (qrEl && data.qrImage) qrEl.src = data.qrImage;
 
-      if (payPage) payPage.classList.add("active");
+      if (payPage) {
+        payPage.classList.add("active");
+        payPage.style.display = "flex";
+      }
 
       startPayTimer(120);
 
       if (pollInterval) clearInterval(pollInterval);
       pollInterval = setInterval(checkPaymentStatus, 3000);
     } catch (err) {
-      console.error("Payment error:", err);
-      alert("Could not start payment. Please try again.");
+      console.error("Payment init error:", err);
+      alert("Payment failed to initialize. Please check connection.");
     } finally {
       isRequestPending = false;
     }
   }
 
+  // 4. Polling Payment Status
   async function checkPaymentStatus() {
     if (!currentOrderId) return;
     try {
@@ -834,7 +844,7 @@
         clearInterval(pollInterval);
         clearInterval(payTimerInterval);
 
-        const confirmBox = document.getElementById("payment-success-box");
+        const confirmBox = document.getElementById("payment-success-box") || document.querySelector(".payment-action-area");
         if (confirmBox) {
           confirmBox.innerHTML = `
             <a href="${data.telegramLink}" target="_blank" style="display:block; background:#0088cc; color:#fff; padding:15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:bold; font-size:18px;">
@@ -844,30 +854,47 @@
         }
       }
     } catch (e) {
-      console.log("Status check error:", e);
+      console.log("Status check polling:", e);
     }
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    const joinButtons = document.querySelectorAll(".join-btn, .bottom-bar, .cta-button, #joinBtn");
-    joinButtons.forEach((btn) => {
-      btn.addEventListener("click", (e) => {
+  // 5. Close Modal Function
+  function closePayment() {
+    const payPage = document.getElementById("pay-page") || document.querySelector(".pay-modal-wrapper");
+    if (payPage) {
+      payPage.classList.remove("active");
+      payPage.style.display = "none";
+    }
+    if (payTimerInterval) clearInterval(payTimerInterval);
+    if (pollInterval) clearInterval(pollInterval);
+  }
+
+  // 6. Bind All Click Triggers
+  function setupTriggers() {
+    const triggers = document.querySelectorAll(
+      ".join-btn, .bottom-bar, .cta-button, #joinBtn, [onclick*='startPayment'], .action-btn"
+    );
+    triggers.forEach((btn) => {
+      btn.onclick = (e) => {
         e.preventDefault();
         startPayment();
-      });
+      };
     });
 
-    const closeBtn = document.getElementById("closePay");
+    const closeBtn = document.getElementById("closePay") || document.querySelector(".close-pay-btn");
     if (closeBtn) {
-      closeBtn.addEventListener("click", () => {
-        const payPage = document.getElementById("pay-page");
-        if (payPage) payPage.classList.remove("active");
-        if (payTimerInterval) clearInterval(payTimerInterval);
-        if (pollInterval) clearInterval(pollInterval);
-      });
+      closeBtn.onclick = (e) => {
+        e.preventDefault();
+        closePayment();
+      };
     }
-  });
-</script>
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setupTriggers);
+  } else {
+    setupTriggers();
+  }
 </script>
 </body>
 </html>
