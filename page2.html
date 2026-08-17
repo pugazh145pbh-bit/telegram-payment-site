@@ -800,35 +800,54 @@
   let pollInterval = null;
   let isRequestPending = false;
 
-  // 1. Offer Countdown Timer (10 Seconds)
+  // 1. Force the price to ₹1 everywhere for testing
+  document.addEventListener("DOMContentLoaded", () => {
+    const prices = document.querySelectorAll(".price-new, #dynamicPrice");
+    prices.forEach(p => p.textContent = "₹1");
+  });
+
+  // 2. Offer Countdown Timer (10 Seconds) & Page Looping
   let offerSeconds = 10;
   function runOfferCountdown() {
+    // Targets all the different timer IDs across index, page2, and offline
     const secElements = [
-      document.getElementById("sec"),
-      document.querySelector(".sec"),
-      document.querySelector(".timer-sec")
+      document.getElementById("timer"),      
+      document.getElementById("secs"),       
+      document.getElementById("off-sec"),    
+      document.getElementById("sec")
     ].filter(Boolean);
 
     const offerInterval = setInterval(() => {
       offerSeconds--;
+      
       secElements.forEach((el) => {
-        el.textContent = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
+        let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
+        // Keep the 00:00 format for index.html, use raw seconds for others
+        if (el.id === "timer") {
+            el.textContent = "00:" + formattedSec; 
+        } else {
+            el.textContent = formattedSec; 
+        }
       });
 
       if (offerSeconds <= 0) {
         clearInterval(offerInterval);
-        const path = window.location.pathname;
-        if (path.includes("index") || path === "/" || path.endsWith("/")) {
-          window.location.href = "page2.html";
+        const path = window.location.pathname.toLowerCase();
+        
+        // Continuous 10-second loop: index -> page2 -> offline -> index
+        if (path.includes("offline")) {
+          window.location.href = "index.html"; 
         } else if (path.includes("page2")) {
           window.location.href = "offline.html";
+        } else {
+          window.location.href = "page2.html";
         }
       }
     }, 1000);
   }
   runOfferCountdown();
 
-  // 2. Checkout Modal 2-Minute Timer
+  // 3. Checkout Modal 2-Minute Timer
   function startPayTimer(durationSeconds) {
     clearInterval(payTimerInterval);
     let timer = durationSeconds;
@@ -852,7 +871,7 @@
     }, 1000);
   }
 
-  // 3. Initiate Payment & Open Modal
+  // 4. Initiate Payment & Open Modal (Fixed IDs)
   async function startPayment() {
     if (isRequestPending) return;
     isRequestPending = true;
@@ -871,10 +890,12 @@
       }
 
       currentOrderId = data.orderId;
-      const orderIdDisplay = document.getElementById("orderIdDisplay") || document.querySelector(".order-id-val");
-      const amountDisplay = document.getElementById("amountDisplay") || document.querySelector(".amount-val");
-      const qrEl = document.getElementById("qrImage") || document.querySelector(".qr-image-src");
-      const payPage = document.getElementById("pay-page") || document.querySelector(".pay-modal-wrapper");
+      const orderIdDisplay = document.getElementById("orderIdDisplay");
+      const amountDisplay = document.getElementById("amountDisplay");
+      const qrEl = document.getElementById("qrImage");
+      
+      // FIXED: Targets correct modal ID "payment-page"
+      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
 
       if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
       if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 1) + ".00";
@@ -897,7 +918,7 @@
     }
   }
 
-  // 4. Polling Payment Status
+  // 5. Polling Payment Status
   async function checkPaymentStatus() {
     if (!currentOrderId) return;
     try {
@@ -911,13 +932,20 @@
         clearInterval(pollInterval);
         clearInterval(payTimerInterval);
 
-        const confirmBox = document.getElementById("payment-success-box") || document.querySelector(".payment-action-area");
+        const confirmBox = document.getElementById("payment-success-box") || document.querySelector(".payment-alert-blue") || document.querySelector(".telegram-icon")?.parentElement;
         if (confirmBox) {
           confirmBox.innerHTML = `
-            <a href="${data.telegramLink}" target="_blank" style="display:block; background:#0088cc; color:#fff; padding:15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:bold; font-size:18px;">
+            <a href="${data.telegramLink}" target="_blank" style="display:block; background:#0088cc; color:#fff; padding:15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:bold; font-size:18px; width:100%;">
               Join Telegram Group Now
             </a>
           `;
+        }
+        
+        // Also show the hidden join button if it exists
+        const tgBtn = document.getElementById("telegramJoinBtn");
+        if(tgBtn) {
+            tgBtn.href = data.telegramLink;
+            tgBtn.style.display = "block";
         }
       }
     } catch (e) {
@@ -925,9 +953,9 @@
     }
   }
 
-  // 5. Close Modal Function
+  // 6. Close Modal Function (Fixed IDs)
   function closePayment() {
-    const payPage = document.getElementById("pay-page") || document.querySelector(".pay-modal-wrapper");
+    const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
     if (payPage) {
       payPage.classList.remove("active");
       payPage.style.display = "none";
@@ -936,10 +964,10 @@
     if (pollInterval) clearInterval(pollInterval);
   }
 
-  // 6. Bind All Click Triggers
+  // 7. Bind All Click Triggers (Added missing container IDs)
   function setupTriggers() {
     const triggers = document.querySelectorAll(
-      ".join-btn, .bottom-bar, .cta-button, #joinBtn, [onclick*='startPayment'], .action-btn"
+      ".join-btn, .bottom-bar, .cta-button, #joinBtn, .cta-container, #open-payment-page, #ctaSection, #open-pay-slide-3"
     );
     triggers.forEach((btn) => {
       btn.onclick = (e) => {
@@ -948,7 +976,8 @@
       };
     });
 
-    const closeBtn = document.getElementById("closePay") || document.querySelector(".close-pay-btn");
+    // FIXED: Target correct close button ID
+    const closeBtn = document.getElementById("close-pay-btn") || document.querySelector(".close-pay-page");
     if (closeBtn) {
       closeBtn.onclick = (e) => {
         e.preventDefault();
