@@ -13,7 +13,11 @@ exports.handler = async (event) => {
   try {
     const { orderId } = JSON.parse(event.body || "{}");
 
-    // 1. Check in Supabase first
+    if (!orderId) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Missing orderId" }) };
+    }
+
+    // 1. Check if already marked as paid in Supabase
     const { data: order } = await supabase
       .from("orders")
       .select("*")
@@ -31,7 +35,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // 2. Poll VyaparGateway Status directly
+    // 2. Poll VyaparGateway Status
     const response = await fetch("https://vyapargateway.com/api/v1/check_order_status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -44,7 +48,7 @@ exports.handler = async (event) => {
     const data = await response.json();
 
     if (data.status && data.data && data.data.status === "success") {
-      // Create Telegram Invite Link
+      // Create Single-use Telegram Invite Link
       const tgRes = await fetch(
         `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createChatInviteLink`,
         {
@@ -52,8 +56,8 @@ exports.handler = async (event) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: process.env.TELEGRAM_CHANNEL_ID,
-            member_limit: 1,
-          }),
+            member_limit: 1
+          })
         }
       );
       const tgData = await tgRes.json();
@@ -83,6 +87,7 @@ exports.handler = async (event) => {
   } catch (error) {
     return {
       statusCode: 500,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ error: error.message })
     };
   }

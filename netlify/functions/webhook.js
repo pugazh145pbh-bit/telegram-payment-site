@@ -17,12 +17,12 @@ exports.handler = async (event) => {
     const rawPayload = event.body;
     const webhookSecret = process.env.VYAPAR_WEBHOOK_SECRET;
 
-    // Verify HMAC-SHA256
-    if (signature && webhookSecret) {
-      const signatureString = `${timestamp}.${rawPayload}`;
+    // Signature verification
+    if (signature && webhookSecret && timestamp) {
+      const stringToSign = `${timestamp}.${rawPayload}`;
       const expectedSignature = crypto
         .createHmac("sha256", webhookSecret)
-        .update(signatureString)
+        .update(stringToSign)
         .digest("hex");
 
       if (signature !== expectedSignature) {
@@ -31,11 +31,10 @@ exports.handler = async (event) => {
     }
 
     const payload = JSON.parse(rawPayload || "{}");
-    const orderId = payload.order_id || payload.id;
+    const orderId = payload.order_id;
     const status = payload.status;
 
-    if (status === "paid" || status === "SUCCESS") {
-      // 1. Create single-use Telegram link
+    if (status === "success" || payload.event === "payment.success") {
       const tgRes = await fetch(
         `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/createChatInviteLink`,
         {
@@ -43,14 +42,13 @@ exports.handler = async (event) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             chat_id: process.env.TELEGRAM_CHANNEL_ID,
-            member_limit: 1,
-          }),
+            member_limit: 1
+          })
         }
       );
       const tgData = await tgRes.json();
       const inviteLink = tgData.result ? tgData.result.invite_link : "";
 
-      // 2. Update Supabase
       await supabase
         .from("orders")
         .update({ status: "paid", telegram_link: inviteLink })
@@ -60,12 +58,13 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ received: true }),
+      body: JSON.stringify({ received: true })
     };
   } catch (error) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ error: error.message })
     };
   }
 };

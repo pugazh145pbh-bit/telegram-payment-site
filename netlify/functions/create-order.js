@@ -12,10 +12,13 @@ exports.handler = async (event) => {
 
   try {
     const { amount } = JSON.parse(event.body || "{}");
-    const orderAmount = amount || 199;
-    const clientTxnId = "TXN_" + Date.now();
+    // Test price set to 1 (Change to 199 later)
+    const orderAmount = Number(amount) || 1;
 
-    // VyaparGateway Official Create Order Call
+    // Generate clean numeric ID for display & unique client transaction ID
+    const userNumericId = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000);
+    const clientTxnId = "TXN_" + userNumericId;
+
     const response = await fetch("https://vyapargateway.com/api/v1/create_order", {
       method: "POST",
       headers: {
@@ -25,25 +28,26 @@ exports.handler = async (event) => {
         key: process.env.VYAPAR_API_KEY,
         amount: orderAmount,
         client_txn_id: clientTxnId,
-        p_info: "Private Telegram Access"
+        p_info: "Private Telegram Access",
+        customer_name: "Customer"
       })
     });
 
     const data = await response.json();
-    console.log("VyaparGateway Response:", JSON.stringify(data));
 
     if (!data.status || !data.data) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: data.msg || "API Error from Gateway" })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ error: data.msg || "Gateway error" })
       };
     }
 
     const finalOrderId = data.data.order_id;
-    const qrCodeImage = data.data.qr_code; // Base64 QR Image from Vyapar
+    const qrCodeImage = data.data.qr_code;
 
-    // Save order in Supabase
-    await supabase.from("orders").insert([
+    // Save initial order in Supabase
+    await supabase.from("orders").upsert([
       {
         order_id: finalOrderId,
         amount: orderAmount,
@@ -57,14 +61,15 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         success: true,
         orderId: finalOrderId,
+        numericTxnId: userNumericId,
         amount: orderAmount,
         qrImage: qrCodeImage
       })
     };
   } catch (error) {
-    console.error("Backend Error:", error);
     return {
       statusCode: 500,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ error: error.message })
     };
   }
