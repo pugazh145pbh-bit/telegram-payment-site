@@ -682,50 +682,6 @@
             50% { transform: translateX(2.5px) scale(1.04); box-shadow: 0 0 8px 2px rgba(16, 185, 129, 0.45); }
         }
 
-        .redirect-overlay-banner {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: #16a34a;
-            color: #ffffff;
-            border-radius: 16px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.8);
-            z-index: 10;
-            opacity: 0;
-            transform: scale(0.95);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: none;
-        }
-
-        .redirect-overlay-banner.active {
-            opacity: 1;
-            transform: scale(1);
-            pointer-events: auto;
-        }
-
-        .redirect-subtext {
-            font-size: 10px;
-            font-weight: 800;
-            letter-spacing: 1.5px;
-            text-transform: uppercase;
-            margin-bottom: 2px;
-            opacity: 0.9;
-        }
-
-        .redirect-maintext {
-            font-size: 15px;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .redirect-maintext svg { width: 18px; height: 18px; fill: white; }
-
         .payments {
             background: rgba(17, 17, 17, 0.6);
             margin: 0 16px 12px 16px;
@@ -933,14 +889,6 @@
                 </div>
                 <button class="cta-right-btn">➔</button>
             </div>
-
-            <div class="redirect-overlay-banner" id="redirectBanner">
-                <div class="redirect-subtext">PLEASE WAIT...</div>
-                <div class="redirect-maintext">
-                    <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
-                    Redirecting to Payment Page
-                </div>
-            </div>
         </div>
 
         <div class="payments">
@@ -981,10 +929,10 @@
             </div>
 
             <div class="pay-details">
-                <div class="pay-row"><span>Order ID:</span> <span id="orderIdDisplay">125073666</span></div>
+                <div class="pay-row"><span>Order ID:</span> <span id="orderIdDisplay">---</span></div>
                 <div class="pay-row"><span>Amount:</span> <span id="amountDisplay">₹ 199.00</span></div>
             </div>
-            <div class="pay-timer" id="pay-timer">4:55</div>
+            <div class="pay-timer" id="pay-timer">5:00</div>
             <div class="pay-alert-blue">
                 <div class="telegram-icon"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.19-.08-.05-.19-.02-.27 0-.12.03-1.97 1.25-5.56 3.67-.53.36-1.01.54-1.44.53-.48-.01-1.39-.27-2.07-.49-.83-.27-1.49-.42-1.43-.89.03-.25.38-.51 1.04-.78 4.08-1.78 6.79-2.95 8.14-3.51 3.88-1.63 4.69-1.9 5.21-1.9.11 0 .36.03.52.16.14.12.18.28.2.43-.02.07-.02.21-.04.31z"/></svg></div>
                 <div class="pay-alert-text">After payment, a Telegram Join button will appear — click it to enter my <span style="color:#d32f2f; font-weight:bold;">Private Group</span></div>
@@ -1173,12 +1121,27 @@
     const ctaSection = document.getElementById('ctaSection');
     const payPage = document.getElementById('payment-page');
     const closePay = document.getElementById('close-pay-btn');
-    const redirectBanner = document.getElementById('redirectBanner');
-    const payTimerEl = document.getElementById('pay-timer');
-    let payTimerInterval;
-
+    let payTimerInterval = null;
     let currentOrderId = null;
     let pollInterval = null;
+
+    function startPayTimer(durationSeconds) {
+        clearInterval(payTimerInterval);
+        let timer = durationSeconds;
+        const display = document.getElementById('pay-timer');
+        
+        payTimerInterval = setInterval(() => {
+            const minutes = Math.floor(timer / 60);
+            const seconds = timer % 60;
+            if (display) {
+                display.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            }
+            if (--timer < 0) {
+                clearInterval(payTimerInterval);
+                if (display) display.textContent = "0:00 - Expired";
+            }
+        }, 1000);
+    }
 
     async function startPayment() {
       try {
@@ -1202,14 +1165,15 @@
         if (orderIdDisplay) orderIdDisplay.textContent = currentOrderId;
         if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 199) + ".00";
         if (qrEl) {
-          if (data.qrImage) {
-            qrEl.src = data.qrImage.startsWith("data:") ? data.qrImage : "data:image/png;base64," + data.qrImage;
+          if (data.qrImage && data.qrImage.length > 5) {
+            qrEl.src = data.qrImage;
           } else {
             qrEl.src = "qrcode.PNG.png";
           }
         }
         
         if (payPage) payPage.classList.add("active");
+        startPayTimer(300);
         pollInterval = setInterval(checkPaymentStatus, 3000);
       } catch (err) {
         console.error("Error creating order:", err);
@@ -1228,9 +1192,11 @@
         const data = await response.json();
         if (data.status === "paid" || data.status === "SUCCESS") {
           clearInterval(pollInterval);
+          clearInterval(payTimerInterval);
           showTelegramLink(data.telegramLink || data.invite_link);
         } else if (data.status === "failed") {
           clearInterval(pollInterval);
+          clearInterval(payTimerInterval);
           alert("Payment failed. Please try again.");
         }
       } catch (err) {
@@ -1270,13 +1236,12 @@
         if (joinedElement) joinedElement.textContent = newCount.toLocaleString();
     }, 2500);
 
-    /* 10-Second Redirect Loop */
+    /* 10-Second Redirect Loop to page2.html */
     let loopTimer = 10;
     let isRedirecting = false;
     
     function updateCountdownTimer() {
         if (payPage && payPage.classList.contains('active')) return;
-
         if (isRedirecting) return;
         const elHrs = document.getElementById('hrs');
         const elMins = document.getElementById('mins');
@@ -1297,6 +1262,5 @@
     updateCountdownTimer();
     setInterval(updateCountdownTimer, 1000);
 </script>
-
 </body>
 </html>
