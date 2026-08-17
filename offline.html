@@ -728,167 +728,109 @@
 </script>
 
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const smartImages = document.querySelectorAll('.smart-img');
-        smartImages.forEach(img => {
-            const basenamesAttr = img.getAttribute('data-basenames');
-            if(!basenamesAttr) return;
-            const names = basenamesAttr.split(',');
-            let currentIndex = 0;
-            img.onerror = () => {
-                currentIndex++;
-                if(currentIndex < names.length) {
-                    img.src = names[currentIndex];
-                }
-            };
-        });
-    });
+  let currentOrderId = null;
+  let payTimerInterval = null;
+  let pollInterval = null;
+  let isRequestPending = false;
 
-    const openModalBtn = document.getElementById('open-join-modal');
-    const modalOverlay = document.getElementById('join-modal-overlay');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    const joinInput = document.getElementById('join-input');
+  function startPayTimer(durationSeconds) {
+    clearInterval(payTimerInterval);
+    let timer = durationSeconds;
+    const display = document.getElementById("pay-timer");
 
-    function openCodeModal() {
-        if (modalOverlay) modalOverlay.classList.add('active');
-        if (joinInput) joinInput.focus(); 
-    }
-    if (openModalBtn) openModalBtn.addEventListener('click', openCodeModal);
-    if (closeModalBtn) closeModalBtn.addEventListener('click', () => { if (modalOverlay) modalOverlay.classList.remove('active'); if (joinInput) joinInput.value = ''; });
-
-    const openPay = document.getElementById('open-payment-page');
-    const openPaySlide3 = document.getElementById('open-pay-slide-3');
-    const payPage = document.getElementById('payment-page');
-    const closePay = document.getElementById('close-pay-btn');
-    let payTimerInterval = null;
-    let currentOrderId = null;
-    let pollInterval = null;
-
-    function startPayTimer(durationSeconds) {
+    payTimerInterval = setInterval(() => {
+      const minutes = Math.floor(timer / 60);
+      const seconds = timer % 60;
+      if (display) {
+        display.textContent = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+      }
+      if (--timer < 0) {
         clearInterval(payTimerInterval);
-        let timer = durationSeconds;
-        const display = document.getElementById('pay-timer');
-        
-        payTimerInterval = setInterval(() => {
-            const minutes = Math.floor(timer / 60);
-            const seconds = timer % 60;
-            if (display) {
-                display.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-            }
-            if (--timer < 0) {
-                clearInterval(payTimerInterval);
-                if (display) display.textContent = "0:00 - Expired";
-            }
-        }, 1000);
-    }
+        if (pollInterval) clearInterval(pollInterval);
+        if (display) display.textContent = "0:00 - Expired";
 
-    async function startPayment() {
-      try {
-        const response = await fetch("/.netlify/functions/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: 199 })
-        });
-        
-        const data = await response.json();
-        if (!response.ok || data.error) {
-          alert("Something went wrong. Please try again.");
-          return;
-        }
-        
-        currentOrderId = data.orderId || data.order_id;
-        const orderIdDisplay = document.getElementById("orderIdDisplay");
-        const amountDisplay = document.getElementById("amountDisplay");
-        const qrEl = document.getElementById("qrImage");
-
-        if (orderIdDisplay) orderIdDisplay.textContent = currentOrderId;
-        if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 199) + ".00";
-        if (qrEl) {
-          if (data.qrImage && data.qrImage.length > 5) {
-            qrEl.src = data.qrImage;
-          } else {
-            qrEl.src = "qrcode.PNG.png";
-          }
-        }
-        
-        if (payPage) payPage.classList.add("active");
-        startPayTimer(300);
-        pollInterval = setInterval(checkPaymentStatus, 3000);
-      } catch (err) {
-        console.error("Error creating order:", err);
-        alert("Could not start payment. Please try again.");
+        setTimeout(() => {
+          const payPage = document.getElementById("pay-page");
+          if (payPage) payPage.classList.remove("active");
+        }, 1500);
       }
-    }
+    }, 1000);
+  }
 
-    async function checkPaymentStatus() {
-      if (!currentOrderId) return;
-      try {
-        const response = await fetch("/.netlify/functions/check-order-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: currentOrderId }),
-        });
-        const data = await response.json();
-        if (data.status === "paid" || data.status === "SUCCESS") {
-          clearInterval(pollInterval);
-          clearInterval(payTimerInterval);
-          showTelegramLink(data.telegramLink || data.invite_link);
-        } else if (data.status === "failed") {
-          clearInterval(pollInterval);
-          clearInterval(payTimerInterval);
-          alert("Payment failed. Please try again.");
-        }
-      } catch (err) {
-        console.error("Error checking status:", err);
+  async function startPayment() {
+    if (isRequestPending) return;
+    isRequestPending = true;
+
+    try {
+      const response = await fetch("/.netlify/functions/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 1 })
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        alert(data.error || "Something went wrong. Please try again.");
+        return;
       }
+
+      currentOrderId = data.orderId;
+      const orderIdDisplay = document.getElementById("orderIdDisplay");
+      const amountDisplay = document.getElementById("amountDisplay");
+      const qrEl = document.getElementById("qrImage");
+      const payPage = document.getElementById("pay-page");
+
+      if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
+      if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 1) + ".00";
+      if (qrEl && data.qrImage) qrEl.src = data.qrImage;
+
+      if (payPage) payPage.classList.add("active");
+
+      startPayTimer(120);
+
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(checkPaymentStatus, 3000);
+    } catch (err) {
+      console.error("Payment initialization error:", err);
+      alert("Could not start payment. Please try again.");
+    } finally {
+      isRequestPending = false;
     }
+  }
 
-    function showTelegramLink(link) {
-      const joinBtn = document.getElementById("telegramJoinBtn");
-      if (joinBtn) {
-        joinBtn.href = link;
-        joinBtn.style.display = "block";
-        joinBtn.textContent = "✅ Payment Confirmed — Join Telegram";
-      }
-    }
+  async function checkPaymentStatus() {
+    if (!currentOrderId) return;
+    try {
+      const response = await fetch("/.netlify/functions/check-order-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: currentOrderId })
+      });
+      const data = await response.json();
+      if (data.status === "paid" && data.telegramLink) {
+        clearInterval(pollInterval);
+        clearInterval(payTimerInterval);
 
-    if (openPay) openPay.addEventListener('click', startPayment);
-    if (openPaySlide3) openPaySlide3.addEventListener('click', startPayment);
-
-    if (closePay) {
-        closePay.addEventListener('click', () => {
-            if (payPage) payPage.classList.remove('active');
-            clearInterval(payTimerInterval);
-            if (pollInterval) clearInterval(pollInterval);
-        });
-    }
-
-    /* 10-Second Redirect Loop to index.html */
-    let loopTimer = 10;
-    let isRedirecting = false;
-    
-    function updateCountdownTimer() {
-        if (payPage && payPage.classList.contains('active')) return;
-        if (isRedirecting) return;
-        
-        const elHrs = document.getElementById('off-hrs');
-        const elMins = document.getElementById('off-min');
-        const elSecs = document.getElementById('off-sec');
-
-        if (elHrs) elHrs.textContent = '00';
-        if (elMins) elMins.textContent = '00';
-        if (elSecs) elSecs.textContent = String(loopTimer).padStart(2, '0');
-
-        if (loopTimer <= 0) {
-            isRedirecting = true;
-            window.location.href = "index.html"; 
-        } else {
-            loopTimer--;
+        const confirmBox = document.getElementById("payment-success-box");
+        if (confirmBox) {
+          confirmBox.innerHTML = `
+            <a href="${data.telegramLink}" target="_blank" style="display:block; background:#0088cc; color:#fff; padding:15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:bold; font-size:18px;">
+              Join Telegram Group Now
+            </a>
+          `;
         }
+      }
+    } catch (e) {
+      console.log("Status check error:", e);
     }
+  }
 
-    updateCountdownTimer();
-    setInterval(updateCountdownTimer, 1000);
+  function closePayment() {
+    const payPage = document.getElementById("pay-page");
+    if (payPage) payPage.classList.remove("active");
+    if (payTimerInterval) clearInterval(payTimerInterval);
+    if (pollInterval) clearInterval(pollInterval);
+  }
 </script>
 </body>
 </html>

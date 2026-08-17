@@ -795,275 +795,110 @@
 </script>
 
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        const smartImages = document.querySelectorAll('.smart-img');
-        smartImages.forEach(img => {
-            const basenamesAttr = img.getAttribute('data-basenames');
-            if(!basenamesAttr) return;
-            const names = basenamesAttr.split(',');
-            let currentIndex = 0;
-            img.onerror = () => {
-                currentIndex++;
-                if(currentIndex < names.length) {
-                    img.src = names[currentIndex];
-                }
-            };
-        });
-    });
+  let currentOrderId = null;
+  let payTimerInterval = null;
+  let pollInterval = null;
+  let isRequestPending = false;
 
-    const topVideoBox = document.getElementById('topVideoBox');
-    const videoControls = document.getElementById('videoControls');
-    let controlTimeout;
+  function startPayTimer(durationSeconds) {
+    clearInterval(payTimerInterval);
+    let timer = durationSeconds;
+    const display = document.getElementById("pay-timer");
 
-    if (topVideoBox) {
-        topVideoBox.addEventListener('click', () => {
-            if (videoControls) videoControls.classList.add('active');
-            clearTimeout(controlTimeout);
-            controlTimeout = setTimeout(() => {
-                if (videoControls) videoControls.classList.remove('active');
-            }, 3500);
-        });
-    }
-
-    const floatingContainer = document.getElementById('floating-emojis');
-    const vibeEmojis = ['❤️', '🔥', '😍', '✨', '👍', '💯', '❤️‍🔥', '🤤', '😘', '👌', '😢', '😅', '🥰', '😯', '😭', '😩', '🥵', '🫦', '👀', '🙋‍♂️', '🙋‍♀️', '👇', '🫴', '🖐️', '🤙', '🫶', '💑', '👑', '💴', '📍', '🚨', '💥', '💦', '⚠️', '🕙'];
-    
-    function spawnEmoji(emojiChar) {
-        if (!floatingContainer) return;
-        const emoji = document.createElement('div');
-        emoji.className = 'float-emoji';
-        emoji.innerText = emojiChar || vibeEmojis[Math.floor(Math.random() * vibeEmojis.length)];
-        emoji.style.left = (Math.floor(Math.random() * 40) - 20) + 'px'; 
-        floatingContainer.appendChild(emoji);
-        setTimeout(() => { if (floatingContainer && floatingContainer.contains(emoji)) emoji.remove(); }, 3500); 
-    }
-
-    function dynamicEmojiEngine() {
-        let randomMode = Math.random();
-        let duration = Math.floor(Math.random() * 4000) + 2000; 
-
-        if (randomMode < 0.25) {
-            setTimeout(dynamicEmojiEngine, duration);
-        } else if (randomMode < 0.70) {
-            let interval = setInterval(() => spawnEmoji(), 1200);
-            setTimeout(() => { clearInterval(interval); dynamicEmojiEngine(); }, duration);
-        } else {
-            let isSame = Math.random() > 0.5;
-            let char = vibeEmojis[Math.floor(Math.random() * vibeEmojis.length)];
-            let interval = setInterval(() => {
-                spawnEmoji(isSame ? char : null);
-            }, 300);
-            setTimeout(() => { clearInterval(interval); dynamicEmojiEngine(); }, duration);
-        }
-    }
-    dynamicEmojiEngine();
-
-    let animated = false;
-    function startPriceCountdown() {
-        if (animated) return;
-        animated = true;
-        let start = 899;
-        const end = 199;
-        const duration = 1400; 
-        const startTime = performance.now();
-        const priceEl = document.getElementById('dynamicPrice');
-
-        function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
-
-        function updatePrice(currentTime) {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const easedProgress = easeOutCubic(progress);
-            const currentPrice = Math.floor(start - (start - end) * easedProgress);
-            
-            if (priceEl) priceEl.textContent = '₹' + currentPrice;
-            
-            if (progress < 1) {
-                requestAnimationFrame(updatePrice);
-            } else {
-                if (priceEl) priceEl.style.color = "#facc15"; 
-            }
-        }
-        requestAnimationFrame(updatePrice);
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) { startPriceCountdown(); }
-        });
-    }, { threshold: 0.1 });
-
-    const ctaObserveEl = document.getElementById('open-payment-page');
-    if (ctaObserveEl) observer.observe(ctaObserveEl);
-
-    const openModalBtn = document.getElementById('open-join-modal');
-    const modalOverlay = document.getElementById('join-modal-overlay');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    const joinInput = document.getElementById('join-input');
-
-    function openCodeModal() {
-        if (modalOverlay) modalOverlay.classList.add('active');
-        if (joinInput) joinInput.focus(); 
-    }
-    if (openModalBtn) openModalBtn.addEventListener('click', openCodeModal);
-    if (closeModalBtn) closeModalBtn.addEventListener('click', () => { if (modalOverlay) modalOverlay.classList.remove('active'); if (joinInput) joinInput.value = ''; });
-
-    const openPay = document.getElementById('open-payment-page');
-    const openPaySlide3 = document.getElementById('open-pay-slide-3');
-    const payPage = document.getElementById('payment-page');
-    const closePay = document.getElementById('close-pay-btn');
-    let payTimerInterval = null;
-    let currentOrderId = null;
-    let pollInterval = null;
-
-    function startPayTimer(durationSeconds) {
+    payTimerInterval = setInterval(() => {
+      const minutes = Math.floor(timer / 60);
+      const seconds = timer % 60;
+      if (display) {
+        display.textContent = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+      }
+      if (--timer < 0) {
         clearInterval(payTimerInterval);
-        let timer = durationSeconds;
-        const display = document.getElementById('pay-timer');
-        
-        payTimerInterval = setInterval(() => {
-            const minutes = Math.floor(timer / 60);
-            const seconds = timer % 60;
-            if (display) {
-                display.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-            }
-            if (--timer < 0) {
-                clearInterval(payTimerInterval);
-                if (display) display.textContent = "0:00 - Expired";
-            }
-        }, 1000);
-    }
+        if (pollInterval) clearInterval(pollInterval);
+        if (display) display.textContent = "0:00 - Expired";
 
-    async function startPayment() {
-      try {
-        const response = await fetch("/.netlify/functions/create-order", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: 199 })
-        });
-        
-        const data = await response.json();
-        if (!response.ok || data.error) {
-          alert("Something went wrong. Please try again.");
-          return;
-        }
-        
-        currentOrderId = data.orderId || data.order_id;
-        const orderIdDisplay = document.getElementById("orderIdDisplay");
-        const amountDisplay = document.getElementById("amountDisplay");
-        const qrEl = document.getElementById("qrImage");
-
-        if (orderIdDisplay) orderIdDisplay.textContent = currentOrderId;
-        if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 199) + ".00";
-        if (qrEl) {
-          if (data.qrImage && data.qrImage.length > 5) {
-            qrEl.src = data.qrImage;
-          } else {
-            qrEl.src = "qrcode.PNG.png";
-          }
-        }
-        
-        if (payPage) payPage.classList.add("active");
-        startPayTimer(300);
-        pollInterval = setInterval(checkPaymentStatus, 3000);
-      } catch (err) {
-        console.error("Error creating order:", err);
-        alert("Could not start payment. Please try again.");
+        setTimeout(() => {
+          const payPage = document.getElementById("pay-page");
+          if (payPage) payPage.classList.remove("active");
+        }, 1500);
       }
-    }
+    }, 1000);
+  }
 
-    async function checkPaymentStatus() {
-      if (!currentOrderId) return;
-      try {
-        const response = await fetch("/.netlify/functions/check-order-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: currentOrderId }),
-        });
-        const data = await response.json();
-        if (data.status === "paid" || data.status === "SUCCESS") {
-          clearInterval(pollInterval);
-          clearInterval(payTimerInterval);
-          showTelegramLink(data.telegramLink || data.invite_link);
-        } else if (data.status === "failed") {
-          clearInterval(pollInterval);
-          clearInterval(payTimerInterval);
-          alert("Payment failed. Please try again.");
-        }
-      } catch (err) {
-        console.error("Error checking status:", err);
+  async function startPayment() {
+    if (isRequestPending) return;
+    isRequestPending = true;
+
+    try {
+      const response = await fetch("/.netlify/functions/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 1 })
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        alert(data.error || "Something went wrong. Please try again.");
+        return;
       }
-    }
 
-    function showTelegramLink(link) {
-      const joinBtn = document.getElementById("telegramJoinBtn");
-      if (joinBtn) {
-        joinBtn.href = link;
-        joinBtn.style.display = "block";
-        joinBtn.textContent = "✅ Payment Confirmed — Join Telegram";
+      currentOrderId = data.orderId;
+      const orderIdDisplay = document.getElementById("orderIdDisplay");
+      const amountDisplay = document.getElementById("amountDisplay");
+      const qrEl = document.getElementById("qrImage");
+      const payPage = document.getElementById("pay-page");
+
+      if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
+      if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 1) + ".00";
+      if (qrEl && data.qrImage) qrEl.src = data.qrImage;
+
+      if (payPage) payPage.classList.add("active");
+
+      startPayTimer(120);
+
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(checkPaymentStatus, 3000);
+    } catch (err) {
+      console.error("Payment initialization error:", err);
+      alert("Could not start payment. Please try again.");
+    } finally {
+      isRequestPending = false;
+    }
+  }
+
+  async function checkPaymentStatus() {
+    if (!currentOrderId) return;
+    try {
+      const response = await fetch("/.netlify/functions/check-order-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: currentOrderId })
+      });
+      const data = await response.json();
+      if (data.status === "paid" && data.telegramLink) {
+        clearInterval(pollInterval);
+        clearInterval(payTimerInterval);
+
+        const confirmBox = document.getElementById("payment-success-box");
+        if (confirmBox) {
+          confirmBox.innerHTML = `
+            <a href="${data.telegramLink}" target="_blank" style="display:block; background:#0088cc; color:#fff; padding:15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:bold; font-size:18px;">
+              Join Telegram Group Now
+            </a>
+          `;
+        }
       }
+    } catch (e) {
+      console.log("Status check error:", e);
     }
+  }
 
-    if (openPay) openPay.addEventListener('click', startPayment);
-    if (openPaySlide3) openPaySlide3.addEventListener('click', startPayment);
-
-    if (closePay) {
-        closePay.addEventListener('click', () => {
-            if (payPage) payPage.classList.remove('active');
-            clearInterval(payTimerInterval);
-            if (pollInterval) clearInterval(pollInterval);
-        });
-    }
-
-    /* 10-Second Redirect Loop to offline.html */
-    let loopTimer = 10;
-    let isRedirecting = false;
-    const topTimerEl = document.getElementById('timer');
-
-    function updateCountdownTimer() {
-        if (payPage && payPage.classList.contains('active')) return;
-        if (isRedirecting) return;
-        
-        if (topTimerEl) {
-            topTimerEl.innerText = `00:${String(loopTimer).padStart(2, '0')}`;
-        }
-
-        if (loopTimer <= 0) {
-            isRedirecting = true;
-            window.location.href = "offline.html";
-        } else {
-            loopTimer--;
-        }
-    }
-
-    updateCountdownTimer();
-    setInterval(updateCountdownTimer, 1000);
-
-    const pingElement = document.getElementById('ping');
-    setInterval(() => { 
-        if (pingElement) pingElement.innerText = Math.floor(Math.random() * (24 - 15 + 1)) + 15 + ' ms'; 
-    }, 2500);
-
-    const viewerElement = document.getElementById('viewer-count');
-    let viewers = 8658;
-    setInterval(() => {
-        viewers += Math.floor(Math.random() * 5) - 2;
-        if (viewerElement) viewerElement.innerText = '👥 ' + viewers.toLocaleString();
-    }, 3000);
-
-    const colors = ['#ef4444', '#db2777', '#10b981', '#f59e0b', '#8b5cf6', '#3b82f6'];
-    const initials = ['A', 'M', 'R', 'S', 'J', 'K', 'P'];
-    const chatBox = document.getElementById('chat-box');
-
-    function createChatMessage() {
-        if (!chatBox) return;
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'chat-msg';
-        const avatar = document.createElement('div');
-        avatar.className = 'avatar';
-        avatar.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-        avatar.innerText = initials[Math.floor(Math.random() * initials.length)];
-        avatar.style.color = 'white';
+  function closePayment() {
+    const payPage = document.getElementById("pay-page");
+    if (payPage) payPage.classList.remove("active");
+    if (payTimerInterval) clearInterval(payTimerInterval);
+    if (pollInterval) clearInterval(pollInterval);
+  }
+</script>        avatar.style.color = 'white';
         const bgLine = document.createElement('div');
         bgLine.className = 'msg-bg';
         bgLine.style.width = Math.floor(Math.random() * (75 - 40 + 1) + 40) + '%'; 
