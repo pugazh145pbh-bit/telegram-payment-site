@@ -876,13 +876,13 @@
     <!-- FIXED BOTTOM BAR -->
     <div class="fixed-bottom-section">
         <div class="cta-wrapper">
-            <div class="cta-container" id="ctaSection" onclick="initiateSmartCheckout()" style="cursor: pointer;">
+            <div class="cta-container" id="ctaSection">
                 <div class="cta-left">
                     <h2>JOIN PRIVATE TELEGRAM GROUP</h2>
                     <div class="price-row">
                         <span class="price-old">₹899</span>
                         <div class="price-new-container">
-                            <span class="price-new" id="dynamicPrice">₹199</span>
+                            <span class="price-new" id="dynamicPrice">₹899</span>
                             <span class="discount-badge">83% OFF</span>
                         </div>
                     </div>
@@ -955,7 +955,6 @@
     </div>
 </div>
 
-<!-- 1. Gradient Background Script -->
 <script type="module">
     import { NeatGradient } from "https://cdn.jsdelivr.net/npm/@firecms/neat@1.1.0/+esm";
 
@@ -1064,7 +1063,6 @@
     }
 </script>
 
-<!-- 2. Timer & Payment API Script -->
 <script>
   let currentOrderId = null;
   let payTimerInterval = null;
@@ -1072,11 +1070,13 @@
   let isRequestPending = false;
   let offerInterval = null;
 
+  // 1. Force price to ₹5 everywhere
   document.addEventListener("DOMContentLoaded", () => {
     const prices = document.querySelectorAll(".price-new, #dynamicPrice");
     prices.forEach(p => p.textContent = "₹5");
   });
 
+  // 2. Offer Countdown Timer (10s) & Page Looping
   let offerSeconds = 10;
   function runOfferCountdown() {
     const secElements = [
@@ -1087,23 +1087,18 @@
     ].filter(Boolean);
 
     offerInterval = setInterval(() => {
-      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
-      const isModalActive = payPage && payPage.classList.contains("active");
+      offerSeconds--;
+      
+      secElements.forEach((el) => {
+        let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
+        if (el.id === "timer") {
+            el.textContent = "00:" + formattedSec; 
+        } else {
+            el.textContent = formattedSec; 
+        }
+      });
 
-      if (!isModalActive && !isRequestPending) {
-        offerSeconds--;
-        
-        secElements.forEach((el) => {
-          let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
-          if (el.id === "timer") {
-              el.textContent = "00:" + formattedSec; 
-          } else {
-              el.textContent = formattedSec; 
-          }
-        });
-      }
-
-      if (offerSeconds <= 0 && !isModalActive && !isRequestPending) {
+      if (offerSeconds <= 0) {
         clearInterval(offerInterval);
         const path = window.location.pathname.toLowerCase();
         
@@ -1119,12 +1114,13 @@
   }
   runOfferCountdown();
 
+  // 3. Checkout Modal 2-Minute Timer
   function startPayTimer(durationSeconds) {
     clearInterval(payTimerInterval);
     let timer = durationSeconds;
     const display = document.getElementById("pay-timer") || document.querySelector(".pay-timer");
 
-    if (display) display.textContent = "5:00"; 
+    if (display) display.textContent = "2:00"; 
 
     payTimerInterval = setInterval(() => {
       const minutes = Math.floor(timer / 60);
@@ -1139,67 +1135,54 @@
 
         setTimeout(() => {
           closePayment();
-          currentOrderId = null; 
-          
-          const path = window.location.pathname.toLowerCase();
-          if (path.includes("offline")) {
-            window.location.href = "index.html"; 
-          } else if (path.includes("page2")) {
-            window.location.href = "offline.html";
-          } else {
-            window.location.href = "page2.html";
-          }
         }, 1200);
       }
     }, 1000);
   }
 
+  // 4. Initiate Payment (With 1-Second Loading UI)
   async function startPayment() {
-    // ரெக்வெஸ்ட் போய்க்கொண்டிருக்கும்போது மீண்டும் கிளிக் செய்வதைத் தடுக்க
     if (isRequestPending) return;
     isRequestPending = true;
 
-    // ஒவ்வொரு கிளிக்கும் புதிய QR கோடு! பழைய தரவுகளை அழிக்கிறோம்.
-    currentOrderId = null;
-    if (payTimerInterval) clearInterval(payTimerInterval);
-    if (pollInterval) clearInterval(pollInterval);
+    // Stop the background redirect timer when user attempts to pay
     if (offerInterval) clearInterval(offerInterval);
 
-    const cta = document.querySelector(".cta-container");
-    if (cta) {
-      const loader = document.createElement("div");
-      loader.id = "inline-loader-overlay";
-      loader.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;background:#1da55a;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;border-radius:inherit;";
-      loader.innerHTML = `
-          <div style="font-size:11px;font-weight:900;letter-spacing:1.5px;margin-bottom:4px;text-transform:uppercase;">PLEASE WAIT...</div>
-          <div style="font-size:15px;font-weight:900;display:flex;align-items:center;gap:6px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17 9V7c0-2.8-2.2-5-5-5S7 4.2 7 7v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V11c0-1.1-.9-2-2-2h-1zM9 7c0-1.7 1.3-3 3-3s3 1.3 3 3v2H9V7z"/></svg>
-              Generating New QR Code...
-          </div>
-      `;
-      cta.appendChild(loader);
-    }
+    // Create and show a beautiful Processing Overlay
+    const loadingOverlay = document.createElement("div");
+    loadingOverlay.id = "payment-processing-overlay";
+    loadingOverlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#10b981;font-weight:800;font-size:16px;letter-spacing:1px;";
+    loadingOverlay.innerHTML = `
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite; margin-bottom: 16px;">
+        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+      </svg>
+      PROCESSING...
+      <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+    `;
+    document.body.appendChild(loadingOverlay);
 
     try {
+      // Run the fetch request AND a 1-second timer at the exact same time
       const fetchPromise = fetch("/.netlify/functions/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: 5 }) 
       });
-      const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); 
+      const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); // Minimum 1 sec delay for UX
 
+      // Wait for both the 1-second timer and the API response to finish
       const [response] = await Promise.all([fetchPromise, timerPromise]);
       const data = await response.json();
       
-      const loader = document.getElementById("inline-loader-overlay");
-      if (loader) loader.remove();
-
+      // If Gateway Rejects
       if (!response.ok || data.error) {
+        document.body.removeChild(loadingOverlay); // Remove loading screen
         alert(data.error || "Gateway rejected. Please try again.");
         isRequestPending = false; 
-        return; 
+        return; // Stop here, do not open checkout page
       }
 
+      // If Gateway Accepts
       currentOrderId = data.orderId;
       const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
       const orderIdDisplay = document.getElementById("orderIdDisplay");
@@ -1210,25 +1193,32 @@
       if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 5) + ".00";
       if (qrEl && data.qrImage) qrEl.src = data.qrImage;
 
+      document.body.removeChild(loadingOverlay); // Remove loading screen
+
+      // Open checkout page ONLY after successful generation
       if (payPage) {
         payPage.classList.add("active");
         payPage.style.display = "flex";
       }
 
-      startPayTimer(300); // 5 நிமிடம்
+      startPayTimer(120);
 
+      if (pollInterval) clearInterval(pollInterval);
       pollInterval = setInterval(checkPaymentStatus, 3000);
 
     } catch (err) {
       console.error("Payment init error:", err);
-      const loader = document.getElementById("inline-loader-overlay");
-      if (loader) loader.remove();
+      if (document.getElementById("payment-processing-overlay")) {
+        document.body.removeChild(loadingOverlay);
+      }
       alert("Network error. Please check your connection and try again.");
+      isRequestPending = false; 
     } finally {
       isRequestPending = false;
     }
   }
 
+  // 5. Polling Payment Status
   async function checkPaymentStatus() {
     if (!currentOrderId) return;
     try {
@@ -1262,6 +1252,7 @@
     }
   }
 
+  // 6. Close Modal Function
   function closePayment() {
     const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
     if (payPage) {
@@ -1270,9 +1261,9 @@
     }
     if (payTimerInterval) clearInterval(payTimerInterval);
     if (pollInterval) clearInterval(pollInterval);
-    currentOrderId = null; // மூடும்போதும் ஆர்டர் ஐடியை அழித்துவிடுகிறோம்
   }
 
+  // 7. Bind Click Triggers
   function setupTriggers() {
     const triggers = document.querySelectorAll(
       ".join-btn, .bottom-bar, .cta-button, #joinBtn, .cta-container, #open-payment-page, #ctaSection, #open-pay-slide-3"
