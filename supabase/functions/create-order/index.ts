@@ -1,85 +1,84 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// CORS Headers (வெப்சைட்டில் இருந்து எரர் வராமல் தடுக்க இது மிக முக்கியம்)
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
-Deno.serve(async (req) => {
-  // Preflight CORS கோரிக்கையைக் கையாளுதல்
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
-
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405, headers: corsHeaders })
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { amount } = await req.json()
-    const orderAmount = Number(amount) || 199; // தொகையை இங்கே மாற்றிக்கொள்ளலாம்
+    const { amount } = await req.json();
+    const apiKey = Deno.env.get("VYAPAR_API_KEY");
 
-    const userNumericId = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000);
-    const clientTxnId = "TXN_" + userNumericId;
-
-    // Vyapar API-க்கு கோரிக்கை அனுப்புதல்
-    const vyaparResponse = await fetch("https://vyapargateway.com/api/v1/create_order", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        key: Deno.env.get("VYAPAR_API_KEY"),
-        amount: orderAmount,
-        client_txn_id: clientTxnId,
-        p_info: "Private Telegram Access",
-      })
-    });
-
-    const data = await vyaparResponse.json();
-
-    if (!data.status || !data.data) {
-      console.error("Vyapar Error:", data);
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: data.msg || "Gateway rejected request" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      )
+        JSON.stringify({ success: false, error: "VYAPAR_API_KEY missing in Secrets" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      );
     }
 
-    const finalOrderId = data.data.order_id;
-    const qrCodeImage = data.data.qr_code;
+    const clientTxnId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-    // சுபாபேஸ் டேட்டாபேஸில் சேமிக்க
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    await supabase.from("orders").upsert([
-      {
-        order_id: finalOrderId,
-        amount: orderAmount,
-        status: "pending"
-      }
-    ]);
-
-    // வெற்றிகரமான பதிலை வெப்சைட்டிற்கு அனுப்புதல்
-    return new Response(
-      JSON.stringify({
-        success: true,
-        orderId: finalOrderId,
-        numericTxnId: userNumericId,
-        amount: orderAmount,
-        qrImage: qrCodeImage
+    const vyaparRes = await fetch("https://api.vyapargateway.com/v1/create_order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        key: apiKey,
+        client_txn_id: clientTxnId,
+        amount: String(amount || 199),
+        p_info: "Private Telegram Access",
+        customer_name: "Customer",
+        customer_email: "customer@telegram.com",
+        customer_mobile: "9999999999",
+        redirect_url: "https://t.me",
+        udf1: "telegram_payment"
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    )
+    });
+
+    const vyaparData = await vyaparRes.json();
+
+    // QR Extraction - Intent, direct QR image or SVG
+    let qrImage = vyaparData?.data?.qr_image || 
+                  vyaparData?.data?.qr_code || 
+                  vyaparData?.data?.intent_url || 
+                  vyaparData?.qr_image;
+
+    // Intent URL மட்டுமே வந்தால் Google Chart API மூலம் உடனடி QR படமாக மாற்றும்
+    if (qrImage && !qrImage.startsWith("http") && !qrImage.startsWith("data:image")) {
+      qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrImage)}`;
+    }
+
+    const orderId = vyaparData?.data?.order_id || clientTxnId;
+
+    if (qrImage) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          orderId: orderId,
+          qrImage: qrImage,
+          paymentUrl: vyaparData?.data?.payment_url
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } else {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Vyapar Gateway rejected order creation",
+          detail: vyaparData
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
 
   } catch (error) {
-    console.error("Server Error:", error.message);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    )
+      JSON.stringify({ success: false, error: error.message }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+    );
   }
-})
+});
