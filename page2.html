@@ -687,6 +687,115 @@
 </div>
 
 <!-- 1. Gradient Background Script -->
+<script type="module">
+    import { NeatGradient } from "https://cdn.jsdelivr.net/npm/@firecms/neat@1.1.0/+esm";
+
+    const config = {
+        colors: [
+            { color: '#000000', enabled: true },
+            { color: '#001129', enabled: true },
+            { color: '#0F0025', enabled: true },
+            { color: '#14080A', enabled: true },
+            { color: '#001129', enabled: true },
+        ],
+        speed: 2,
+        horizontalPressure: 4,
+        verticalPressure: 4,
+        waveFrequencyX: 3,
+        waveFrequencyY: 2,
+        waveAmplitude: 1,
+        shadows: 2,
+        highlights: 2,
+        colorBrightness: 1,
+        colorSaturation: -1,
+        wireframe: false,
+        colorBlending: 7,
+        backgroundColor: '#010101',
+        backgroundAlpha: 1,
+        grainScale: 2,
+        grainSparsity: 0,
+        grainIntensity: 0,
+        grainSpeed: 1,
+        resolution: 0.75,
+        yOffset: 499.833251953125,
+        yOffsetWaveMultiplier: 2.2,
+        yOffsetColorMultiplier: 2.5,
+        yOffsetFlowMultiplier: 2.8,
+        flowDistortionA: 3.7,
+        flowDistortionB: 1.4,
+        flowScale: 2.9,
+        flowEase: 0.32,
+        flowEnabled: false,
+        enableProceduralTexture: false,
+        transparentTextureVoid: false,
+        textureVoidLikelihood: 0.27,
+        textureVoidWidthMin: 60,
+        textureVoidWidthMax: 420,
+        textureBandDensity: 1.2,
+        textureColorBlending: 0.06,
+        textureSeed: 333,
+        textureEase: 0.68,
+        proceduralBackgroundColor: '#0E0707',
+        textureShapeTriangles: 20,
+        textureShapeCircles: 15,
+        textureShapeBars: 15,
+        textureShapeSquiggles: 10,
+        domainWarpEnabled: false,
+        domainWarpIntensity: 0,
+        domainWarpScale: 3,
+        vignetteIntensity: 0,
+        vignetteRadius: 0.8,
+        fresnelEnabled: false,
+        fresnelPower: 2,
+        fresnelIntensity: 0.5,
+        fresnelColor: '#FFFFFF',
+        iridescenceEnabled: false,
+        iridescenceIntensity: 0.5,
+        iridescenceSpeed: 1,
+        bloomIntensity: 0,
+        bloomThreshold: 0.7,
+        chromaticAberration: 0,
+        shapeType: 'plane',
+        shapeRotationX: 0,
+        shapeRotationY: 0,
+        shapeRotationZ: 0,
+        shapeAutoRotateSpeedX: 0,
+        shapeAutoRotateSpeedY: 0,
+        sphereRadius: 15,
+        torusRadius: 15,
+        torusTube: 5,
+        cylinderRadius: 10,
+        cylinderHeight: 40,
+        planeBend: 0,
+        planeTwist: 0,
+        silhouetteFade: 0.25,
+        cylinderFade: 0.08,
+        ribbonFade: 0.05,
+        flatShading: true,
+        cameraLock: true,
+        cameraX: 0,
+        cameraY: 0,
+        cameraZ: 0,
+        cameraRotationX: 0,
+        cameraRotationY: 0,
+        cameraRotationZ: 0,
+        cameraZoom: 1,
+    };
+
+    const canvas = document.getElementById("gradient");
+    if (canvas) {
+        const gradient = new NeatGradient({
+            ref: canvas,
+            ...config
+        });
+
+        window.addEventListener("scroll", () => {
+            gradient.yOffset = window.scrollY;
+        });
+    }
+</script>
+
+<!-- 2. Timer & Payment API Script -->
 <script>
 (() => {
     const TOTAL_DURATION_SECONDS = 10; // 10 விநாடிகள் டைமர்
@@ -695,7 +804,7 @@
 
     let timerInterval = null;
 
-    // 1. Timer UI Update
+    // 1. Timer UI-ஐ அப்டேட் செய்யும் லாஜிக்
     function renderTimerUI(secondsRemaining) {
         const hrsElem = document.getElementById('hrs');
         const minsElem = document.getElementById('mins');
@@ -711,7 +820,6 @@
         if (secsElem) secsElem.innerText = String(secs).padStart(2, '0');
     }
 
-    // 2. Non-Stop Background Timer
     function startNonStopTimer() {
         if (timerInterval) clearInterval(timerInterval);
 
@@ -749,19 +857,18 @@
         }, 1000);
     }
 
-    // 3. உங்களின் பழைய UI டிசைன் (Old UI Expired Logic)
+    // 🔴 ISSUE 1 FIX: 10 விநாடிகள் முடிந்ததும் அடுத்தடுத்த பக்கங்களுக்கு மாறுதல் (Loop)
     function handleTokenExpired() {
         localStorage.removeItem(STORAGE_KEY_TARGET);
-        const payContainer = document.getElementById('checkout-container') || document.querySelector('.checkout-box');
-        if (payContainer) {
-            payContainer.innerHTML = `
-                <div style="text-align: center; padding: 25px 15px; color: #ff4d4d; font-family: sans-serif;">
-                    <div style="font-size: 32px; margin-bottom: 8px;">⏳</div>
-                    <h3 style="margin: 0 0 8px 0; font-size: 20px;">Session Expired</h3>
-                    <p style="color: #bbb; font-size: 14px; margin: 0 0 15px 0;">Payment token timed out. Please initiate payment again.</p>
-                    <button onclick="location.reload()" style="padding: 10px 22px; background: #00c853; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Refresh Offer</button>
-                </div>
-            `;
+        const currentPath = window.location.pathname;
+        
+        if (currentPath.includes('page2.html')) {
+            window.location.href = 'offline.html';
+        } else if (currentPath.includes('offline.html')) {
+            window.location.href = 'index.html';
+        } else {
+            // index.html ஆக இருந்தால் page2-க்கு செல்லும்
+            window.location.href = 'page2.html';
         }
     }
 
@@ -769,8 +876,14 @@
         localStorage.removeItem('active_paisa_offset');
     };
 
-    // 4. Pay பட்டனை அழுத்தினால் நடக்கும் செயல்பாடு
+    // 🔴 ISSUE 2 FIX: Pay பட்டனை அழுத்தினால் Checkout ஓபன் ஆகும் லாஜிக்
     window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
+        
+        // லோடிங் காட்ட (உங்களின் H2 எழுத்தை Processing என மாற்றும்)
+        const payBtnText = document.querySelector('.cta-left h2');
+        const originalText = payBtnText ? payBtnText.innerText : 'Loading...';
+        if (payBtnText) payBtnText.innerText = "Processing...";
+
         let amountToSend = BASE_AMOUNT;
 
         if (isRetryWithPaisa) {
@@ -797,20 +910,43 @@
                 throw new Error("Gateway busy");
             }
 
-            // வெற்றி பெற்றால் உங்களின் பழைய UI / Checkout Page-ஐ ஓபன் செய்யும் லாஜிக்
-            if (data.payment_url) {
-                window.location.href = data.payment_url;
-            } else if (typeof handleOrderSuccess === 'function') {
-                handleOrderSuccess(data);
+            if (payBtnText) payBtnText.innerText = originalText;
+
+            // வெற்றி பெற்றால் அழகாக QR கோடைக் கீழே காட்டுதல்
+            if (data.success && data.qrImage) {
+                showBottomCheckout(data.qrImage, amountToSend, data.orderId);
             } else {
-                console.log("Order Successful:", data);
+                alert("QR Code Error!");
             }
 
         } catch (error) {
             console.error("Order Failed:", error);
+            if (payBtnText) payBtnText.innerText = originalText;
             window.resetToOriginalPrice();
+            alert("Payment gateway error. Please try again.");
         }
     };
+
+    // உங்களின் பழைய UI-ஐ கெடுக்காத அழகான Dark Theme Bottom Checkout
+    function showBottomCheckout(qr, amt, id) {
+        const old = document.getElementById('my-checkout-box');
+        if(old) old.remove();
+
+        const box = document.createElement('div');
+        box.id = "my-checkout-box";
+        box.style.cssText = "position:fixed; bottom:0; left:0; width:100%; background:#0a0a0a; border-top: 1px solid #333; border-radius: 20px 20px 0 0; padding:25px 20px; z-index:999999; text-align:center; color:white; font-family:sans-serif; animation: slideUp 0.3s ease-out; box-shadow: 0 -10px 30px rgba(0,0,0,0.8);";
+        box.innerHTML = `
+            <style>@keyframes slideUp { from { bottom: -100%; } to { bottom: 0; } }</style>
+            <h3 style="margin: 0 0 10px 0; font-size:18px; color:#bbb;">Complete Payment</h3>
+            <h1 style="margin: 0 0 15px 0; font-size:36px; color:#00e676;">₹${amt}</h1>
+            <div style="background:#fff; display:inline-block; padding:12px; border-radius:12px; margin-bottom:15px;">
+                <img src="${qr}" style="width:200px; height:200px; display:block;">
+            </div>
+            <p style="margin: 0 0 20px 0; font-size:12px; color:#666;">Order ID: ${id}</p>
+            <button onclick="document.getElementById('my-checkout-box').remove()" style="width:100%; max-width: 350px; padding:15px; background:#222; color:#fff; border:1px solid #444; border-radius:10px; font-size:16px; font-weight:bold; cursor:pointer;">Cancel</button>
+        `;
+        document.body.appendChild(box);
+    }
 
     window.addEventListener('pageshow', () => {
         window.resetToOriginalPrice();
