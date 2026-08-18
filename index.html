@@ -1065,6 +1065,15 @@
 <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+    <style>
+        .pay-loading-active {
+            background: #00c853 !important;
+            border: none !important;
+            box-shadow: 0 0 25px rgba(0, 200, 83, 0.4) !important;
+            transition: all 0.3s ease !important;
+        }
+    </style>
+
     <script>
     (() => {
         const BASE_AMOUNT = 199.00;
@@ -1076,19 +1085,30 @@
         let pollInterval = null;
         let timerInterval = null;
 
-        window.initiateSmartCheckout = async function() {
-            const btn = document.getElementById('ctaSection') || document.querySelector('.cta-btn') || document.querySelector('.cta-container');
-            const originalHTML = btn ? btn.innerHTML : '';
+        // நேரடி கிளிக் ஹேண்ட்லர் (எந்த பட்டனாக இருந்தாலும் இயங்கும்)
+        window.initiateSmartCheckout = async function(event) {
+            let targetBtn = null;
+            if (event && event.currentTarget) {
+                targetBtn = event.currentTarget;
+            } else {
+                targetBtn = document.querySelector('.cta-btn') || 
+                            document.querySelector('.pay-btn') || 
+                            document.getElementById('ctaSection') || 
+                            document.querySelector('.cta-container') ||
+                            document.querySelector('button[onclick*="initiateSmartCheckout"]');
+            }
 
-            // Redirecting Button State
-            if (btn) {
-                btn.style.background = '#00c853';
-                btn.style.border = 'none';
-                btn.innerHTML = `
-                    <div style="width: 100%; text-align: center; padding: 12px 0; color: #fff; font-family: inherit;">
-                        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px;">PLEASE WAIT...</div>
-                        <div style="font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <i class="fa-solid fa-lock"></i> Redirecting to Payment Page
+            const originalHTML = targetBtn ? targetBtn.innerHTML : '';
+            const originalBg = targetBtn ? targetBtn.style.background : '';
+
+            // 1. Image 2 போன்ற பச்சை நிற பட்டன் UI (உடனடி மாற்றம்)
+            if (targetBtn) {
+                targetBtn.classList.add('pay-loading-active');
+                targetBtn.innerHTML = `
+                    <div style="width: 100%; text-align: center; padding: 10px 0; color: #fff; font-family: inherit;">
+                        <div style="font-size: 10.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; opacity: 0.95;">PLEASE WAIT...</div>
+                        <div style="font-size: 16.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fa-solid fa-lock" style="font-size: 15px;"></i> Redirecting to Payment Page
                         </div>
                     </div>
                 `;
@@ -1107,7 +1127,7 @@
                     currentOrderId = data.orderId;
                     currentClientTxnId = data.clientTxnId;
 
-                    // Clean Safe Display Order ID (8-இலக்க பாதுகாப்பான எண்)
+                    // பாதுகாப்பான 8-இலக்க எண் Order ID
                     let safeDisplayOrderId = String(currentOrderId).replace(/\D/g, '').slice(-8);
                     if (!safeDisplayOrderId || safeDisplayOrderId.length < 5) {
                         safeDisplayOrderId = String(Math.floor(10000000 + Math.random() * 90000000));
@@ -1120,26 +1140,36 @@
                     }
 
                     setTimeout(() => {
-                        if (btn) {
-                            btn.innerHTML = originalHTML;
-                            btn.style.background = '';
+                        if (targetBtn) {
+                            targetBtn.innerHTML = originalHTML;
+                            targetBtn.classList.remove('pay-loading-active');
+                            targetBtn.style.background = originalBg;
                         }
                         displayPixelPerfectModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
                         startPaymentStatusCheck(currentOrderId, currentClientTxnId);
                     }, 800);
 
                 } else {
-                    if (btn) { btn.innerHTML = originalHTML; btn.style.background = ''; }
+                    if (targetBtn) { 
+                        targetBtn.innerHTML = originalHTML; 
+                        targetBtn.classList.remove('pay-loading-active');
+                        targetBtn.style.background = originalBg; 
+                    }
                     alert(data.error || "Payment Gateway Error. Please try again.");
                 }
 
             } catch (err) {
                 console.error("Payment Error:", err);
-                if (btn) { btn.innerHTML = originalHTML; btn.style.background = ''; }
+                if (targetBtn) { 
+                    targetBtn.innerHTML = originalHTML; 
+                    targetBtn.classList.remove('pay-loading-active');
+                    targetBtn.style.background = originalBg; 
+                }
                 alert("Payment Gateway Error. Please try again.");
             }
         };
 
+        // 2. Image 3 போன்ற துல்லியமான செக்அவுட் கார்டு
         function displayPixelPerfectModal(qrSrc, amt, displayOrderId) {
             const existing = document.getElementById('dynamic-qr-modal');
             if (existing) existing.remove();
@@ -1147,43 +1177,43 @@
             const modal = document.createElement('div');
             modal.id = 'dynamic-qr-modal';
             modal.style.cssText = `
-                position: fixed; inset: 0; background: rgba(15, 17, 26, 0.82);
+                position: fixed; inset: 0; background: rgba(10, 12, 18, 0.85);
                 display: flex; align-items: center; justify-content: center;
-                z-index: 999999; backdrop-filter: blur(5px); padding: 16px;
+                z-index: 999999; backdrop-filter: blur(6px); padding: 14px;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 transition: opacity 0.4s ease;
             `;
 
             modal.innerHTML = `
                 <div id="checkout-card-box" style="
-                    background: #ffffff; width: 100%; max-width: 375px;
-                    border-radius: 26px; padding: 24px 20px 20px 20px; text-align: center;
-                    color: #1a1a1a; box-shadow: 0 25px 60px rgba(0,0,0,0.45);
+                    background: #ffffff; width: 100%; max-width: 365px;
+                    border-radius: 26px; padding: 22px 18px 18px 18px; text-align: center;
+                    color: #1a1a1a; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
                     position: relative; transition: all 0.5s ease;
                 ">
                     <!-- Top Green Banner -->
                     <div style="
-                        background: #e8f9f0; border-radius: 14px; padding: 12px 14px;
+                        background: #eafaf1; border-radius: 14px; padding: 12px 14px;
                         display: flex; align-items: center; gap: 12px; text-align: left;
-                        margin-bottom: 20px;
+                        margin-bottom: 18px;
                     ">
-                        <i class="fa-solid fa-qrcode" style="font-size: 24px; color: #6ee7b7;"></i>
-                        <div style="font-size: 11.5px; color: #1e3a2b; line-height: 1.4; font-weight: 500;">
+                        <i class="fa-solid fa-qrcode" style="font-size: 22px; color: #34d399;"></i>
+                        <div style="font-size: 11px; color: #154d32; line-height: 1.35; font-weight: 500;">
                             Please do not close this page after successful payment ... Wait until your payment is <b style="color: #059669; font-weight: 800;">confirmed.</b>
                         </div>
                     </div>
 
                     <!-- Title -->
-                    <div style="font-size: 19px; font-weight: 800; color: #0b1528; margin-bottom: 16px; letter-spacing: -0.2px;">Scan to Pay</div>
+                    <div style="font-size: 18px; font-weight: 800; color: #0b1528; margin-bottom: 14px;">Scan to Pay</div>
 
                     <!-- Clean QR Display -->
-                    <div style="display: flex; justify-content: center; margin-bottom: 22px;">
-                        <img src="${qrSrc}" alt="Payment QR" style="width: 200px; height: 200px; display: block; border-radius: 4px;">
+                    <div style="display: flex; justify-content: center; margin-bottom: 18px;">
+                        <img src="${qrSrc}" alt="Payment QR" style="width: 195px; height: 195px; display: block; border-radius: 4px;">
                     </div>
 
                     <!-- Order Details -->
-                    <div style="margin-bottom: 14px; font-size: 14.5px; padding: 0 10px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="margin-bottom: 12px; font-size: 14px; padding: 0 8px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
                             <span style="font-weight: 700; color: #475569;">Order ID:</span>
                             <span style="font-weight: 600; color: #334155; letter-spacing: 0.5px;">${displayOrderId}</span>
                         </div>
@@ -1196,46 +1226,47 @@
                     <!-- Countdown Timer -->
                     <div id="payment-countdown" style="
                         font-size: 22px; font-weight: 800; color: #e11d48;
-                        margin: 12px 0 16px 0;
+                        margin: 10px 0 14px 0;
                     ">5:00</div>
 
-                    <!-- Telegram Blue Info Box -->
+                    <!-- Telegram Blue Box -->
                     <div style="
                         background: #ebf3ff; border-radius: 14px; padding: 12px 14px;
-                        display: flex; align-items: center; gap: 14px; text-align: left;
-                        margin-bottom: 22px;
+                        display: flex; align-items: center; gap: 12px; text-align: left;
+                        margin-bottom: 18px;
                     ">
                         <div style="
-                            background: #0088cc; width: 42px; height: 42px; border-radius: 50%;
+                            background: #0088cc; width: 40px; height: 40px; border-radius: 50%;
                             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-                            color: #fff; font-size: 20px;
+                            color: #fff; font-size: 19px;
                         ">
                             <i class="fa-brands fa-telegram"></i>
                         </div>
-                        <div style="font-size: 12px; color: #1e293b; line-height: 1.4; font-weight: 500;">
+                        <div style="font-size: 11.5px; color: #1e293b; line-height: 1.4; font-weight: 500;">
                             After payment, a Telegram Join button will appear — click it to enter my <b style="color: #e11d48; font-weight: 700;">Private Group</b>
                         </div>
                     </div>
 
                     <!-- Bottom UPI Branding -->
-                    <div style="font-size: 11px; font-weight: 800; color: #ef4444; margin-bottom: 10px;">
+                    <div style="font-size: 11px; font-weight: 800; color: #ef4444; margin-bottom: 8px;">
                         Scan & Pay with any UPI Payment App
                     </div>
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; opacity: 0.9;">
-                        <span style="font-size: 13px; font-weight: 800; color: #4285f4;"><i class="fa-brands fa-google-pay" style="font-size: 24px; vertical-align: middle;"></i></span>
-                        <span style="font-size: 13px; font-weight: 800; color: #00b9f1;">Paytm</span>
-                        <span style="font-size: 13px; font-weight: 800; color: #5f259f;">PhonePe</span>
-                        <span style="font-size: 11px; font-weight: 900; color: #0f172a; border: 1px solid #cbd5e1; padding: 0px 4px; border-radius: 4px;">UPI</span>
-                        <i class="fa-brands fa-cc-visa" style="font-size: 18px; color: #1a1f71;"></i>
-                        <i class="fa-brands fa-cc-mastercard" style="font-size: 18px; color: #eb001b;"></i>
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px; opacity: 0.9;">
+                        <span style="font-size: 12px; font-weight: 800; color: #4285f4;"><i class="fa-brands fa-google-pay" style="font-size: 22px; vertical-align: middle;"></i></span>
+                        <span style="font-size: 12px; font-weight: 800; color: #00b9f1;">Paytm</span>
+                        <span style="font-size: 12px; font-weight: 800; color: #5f259f;">PhonePe</span>
+                        <span style="font-size: 10.5px; font-weight: 900; color: #0f172a; border: 1px solid #cbd5e1; padding: 0px 3px; border-radius: 4px;">UPI</span>
+                        <i class="fa-brands fa-cc-visa" style="font-size: 17px; color: #1a1f71;"></i>
+                        <i class="fa-brands fa-cc-mastercard" style="font-size: 17px; color: #eb001b;"></i>
                     </div>
                 </div>
             `;
 
             document.body.appendChild(modal);
-            startTimer(300); // 300 விநாடிகள் (5 நிமிடங்கள்)
+            startTimer(300);
         }
 
+        // 3. 5-Minute Timer & Session Vanish Animation
         function startTimer(duration) {
             if (timerInterval) clearInterval(timerInterval);
             let timer = duration;
@@ -1251,7 +1282,6 @@
                     timerDisplay.textContent = `${minutes}:${seconds < 10 ? "0" + seconds : seconds}`;
                 }
 
-                // 5 நிமிடம் முடிந்ததும் நடக்கும் அனிமேஷன் & மறைவு
                 if (--timer < 0) {
                     clearInterval(timerInterval);
                     if (pollInterval) clearInterval(pollInterval);
@@ -1266,7 +1296,7 @@
                         cardBox.style.filter = "grayscale(80%)";
                         cardBox.style.transform = "scale(0.96)";
                         cardBox.insertAdjacentHTML('afterbegin', `
-                            <div style="position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); background: rgba(225,29,72,0.95); color: #fff; padding: 12px 20px; border-radius: 12px; font-size: 13px; font-weight: 800; z-index: 100; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 80%;">
+                            <div style="position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); background: rgba(225,29,72,0.95); color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 13px; font-weight: 800; z-index: 100; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 80%;">
                                 Session Expired<br><span style="font-size:11px; font-weight:normal; opacity:0.9;">Please initiate payment again</span>
                             </div>
                         `);
@@ -1282,6 +1312,7 @@
             }, 1000);
         }
 
+        // 4. Auto Polling & Telegram Redirection
         function startPaymentStatusCheck(orderId, clientTxnId) {
             if (pollInterval) clearInterval(pollInterval);
 
@@ -1309,7 +1340,7 @@
                                     <div style="width: 64px; height: 64px; background: #10b981; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto 18px auto; box-shadow: 0 8px 20px rgba(16,185,129,0.35);">
                                         <i class="fa-solid fa-check"></i>
                                     </div>
-                                    <h2 style="font-size: 21px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">Payment Successful!</h2>
+                                    <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">Payment Successful!</h2>
                                     <p style="font-size: 13px; color: #64748b; margin-bottom: 22px;">Redirecting you to Telegram Private Group...</p>
                                     <a href="${TELEGRAM_VIP_LINK}" style="
                                         display: block; width: 100%; padding: 14px; background: #0088cc;
