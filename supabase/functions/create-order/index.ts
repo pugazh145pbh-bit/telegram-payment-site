@@ -23,31 +23,32 @@ serve(async (req) => {
 
     const clientTxnId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-    const vyaparRes = await fetch("https://api.vyapargateway.com/v1/create_order", {
+    // சரியான Vyapar / EkQR API Endpoint
+    const vyaparRes = await fetch("https://merchant.vyapargateway.com/api/create_order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         key: apiKey,
         client_txn_id: clientTxnId,
         amount: String(amount || 199),
-        p_info: "Private Telegram Access",
-        customer_name: "Customer",
-        customer_email: "customer@telegram.com",
-        customer_mobile: "9999999999",
+        p_info: "VIP Access",
+        customer_name: "Member",
+        customer_email: "member@telegram.com",
+        customer_mobile: "9876543210",
         redirect_url: "https://t.me",
-        udf1: "telegram_payment"
+        udf1: "telegram_channel"
       }),
     });
 
     const vyaparData = await vyaparRes.json();
+    console.log("Vyapar Gateway Response:", JSON.stringify(vyaparData));
 
-    // QR Extraction - Intent, direct QR image or SVG
+    // Dynamic QR மற்றும் Payment Data பிரித்தெடுத்தல்
     let qrImage = vyaparData?.data?.qr_image || 
                   vyaparData?.data?.qr_code || 
                   vyaparData?.data?.intent_url || 
-                  vyaparData?.qr_image;
+                  vyaparData?.data?.payment_url;
 
-    // Intent URL மட்டுமே வந்தால் Google Chart API மூலம் உடனடி QR படமாக மாற்றும்
     if (qrImage && !qrImage.startsWith("http") && !qrImage.startsWith("data:image")) {
       qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrImage)}`;
     }
@@ -68,7 +69,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Vyapar Gateway rejected order creation",
+          error: "Vyapar Response Error",
           detail: vyaparData
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
