@@ -1065,145 +1065,125 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    // --- CONFIGURATION ---
-    const AMOUNT_VAL = "199.00";
-    let countdownTimer = null;
-    let paymentPollInterval = null;
+    // --- SUPABASE EDGE FUNCTION CONFIG ---
+    const SUPABASE_PROJECT_URL = "https://your-supabase-id.supabase.co"; // உங்கள் Supabase URL-ஐ மாற்றவும்
+    const SUPABASE_ANON_KEY = "your-anon-public-key"; // உங்கள் Supabase Anon Key-ஐ மாற்றவும்
 
-    // --- DOM ELEMENTS ---
     const payOverlay = document.getElementById("payment-page");
-    const joinModal = document.getElementById("join-modal-overlay");
     const qrImgElem = document.getElementById("qrImage");
     const orderIdElem = document.getElementById("orderIdDisplay");
     const amountElem = document.getElementById("amountDisplay");
     const timerElem = document.getElementById("pay-timer");
     const telegramBtn = document.getElementById("telegramJoinBtn");
     const closePayBtn = document.getElementById("close-pay-btn");
-    const closeModalBtn = document.getElementById("close-modal-btn");
-    const openJoinBtn = document.getElementById("open-join-modal");
 
-    const triggerButtons = [
+    let timerInterval = null;
+    let pollInterval = null;
+
+    async function initSupabasePayment() {
+        if (payOverlay) payOverlay.style.display = "flex";
+        if (orderIdElem) orderIdElem.innerText = "Generating...";
+        if (amountElem) amountElem.innerText = "₹ 199.00";
+        if (telegramBtn) telegramBtn.style.display = "none";
+
+        try {
+            // Call Supabase Edge Function: create-order
+            const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/create-order`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                },
+                body: JSON.stringify({ amount: 199 })
+            });
+
+            const data = await response.json();
+
+            if (data && data.order_id) {
+                if (orderIdElem) orderIdElem.innerText = data.order_id;
+                
+                // Vyapar Gateway QR code response mapping
+                if (data.qr_code_url && qrImgElem) {
+                    qrImgElem.src = data.qr_code_url;
+                } else if (data.upi_intent_url && qrImgElem) {
+                    qrImgElem.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data.upi_intent_url)}`;
+                }
+
+                startPayTimer(300);
+                pollPaymentStatus(data.order_id);
+            }
+        } catch (error) {
+            console.error("Supabase create-order function error:", error);
+            if (orderIdElem) orderIdElem.innerText = "Failed to load";
+        }
+    }
+
+    function startPayTimer(duration) {
+        if (timerInterval) clearInterval(timerInterval);
+        let time = duration;
+
+        timerInterval = setInterval(() => {
+            const mins = Math.floor(time / 60);
+            const secs = time % 60;
+            if (timerElem) timerElem.innerText = `${mins}:${String(secs).padStart(2, '0')}`;
+
+            if (time <= 0) {
+                clearInterval(timerInterval);
+                if (pollInterval) clearInterval(pollInterval);
+                if (timerElem) timerElem.innerText = "EXPIRED";
+            }
+            time--;
+        }, 1000);
+    }
+
+    function pollPaymentStatus(orderId) {
+        if (pollInterval) clearInterval(pollInterval);
+
+        pollInterval = setInterval(async () => {
+            try {
+                // Check payment status from Supabase Table / Webhook response
+                const res = await fetch(`${SUPABASE_PROJECT_URL}/rest/v1/orders?order_id=eq.${orderId}&select=status,invite_link`, {
+                    headers: {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+                const orders = await res.json();
+
+                if (orders && orders.length > 0 && orders[0].status === "PAID") {
+                    clearInterval(pollInterval);
+                    clearInterval(timerInterval);
+
+                    if (telegramBtn) {
+                        telegramBtn.style.display = "block";
+                        telegramBtn.href = orders[0].invite_link || "#";
+                    }
+                    if (timerElem) {
+                        timerElem.innerText = "PAID SUCCESSFULLY ✅";
+                        timerElem.style.color = "#10b981";
+                    }
+                }
+            } catch (e) {
+                // Polling retry
+            }
+        }, 3000);
+    }
+
+    const openTriggers = [
         document.getElementById("open-payment-page"),
         document.getElementById("ctaSection"),
         document.getElementById("open-pay-slide-3")
     ];
 
-    // --- 1. START 5-MINUTE COUNTDOWN ---
-    function startCountdown(durationSeconds) {
-        if (countdownTimer) clearInterval(countdownTimer);
-        let remaining = durationSeconds;
-
-        countdownTimer = setInterval(() => {
-            const mins = Math.floor(remaining / 60);
-            const secs = remaining % 60;
-
-            if (timerElem) {
-                timerElem.innerText = `${mins}:${String(secs).padStart(2, '0')}`;
-            }
-
-            if (remaining <= 0) {
-                clearInterval(countdownTimer);
-                if (paymentPollInterval) clearInterval(paymentPollInterval);
-                if (timerElem) {
-                    timerElem.innerText = "TIME EXPIRED";
-                    timerElem.style.color = "#d32f2f";
-                }
-            }
-            remaining--;
-        }, 1000);
-    }
-
-    // --- 2. GENERATE DYNAMIC PAYMENT & BACKEND INTEGRATION ---
-    async function initPayment() {
-        if (!payOverlay) return;
-        payOverlay.style.display = "flex";
-
-        // Reset UI Elements
-        if (telegramBtn) telegramBtn.style.display = "none";
-        if (amountElem) amountElem.innerText = `₹ ${AMOUNT_VAL}`;
-
-        // Generate Unique Order ID
-        const dynamicOrderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
-        if (orderIdElem) orderIdElem.innerText = dynamicOrderId;
-
-        // Dynamic UPI QR Fallback Generator (Instant Load)
-        const upiString = `upi://pay?pa=your-upi-id@okaxis&pn=Indhuja&am=${AMOUNT_VAL}&cu=INR&tn=${dynamicOrderId}`;
-        if (qrImgElem) {
-            qrImgElem.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiString)}`;
-        }
-
-        // Start Countdown Timer
-        startCountdown(5 * 60);
-
-        // Try Backend Vyapar API Integration
-        try {
-            const res = await fetch("/api/create-vyapar-order", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ orderId: dynamicOrderId, amount: AMOUNT_VAL })
-            });
-            const data = await res.json();
-            if (data && data.qrCodeUrl && qrImgElem) {
-                qrImgElem.src = data.qrCodeUrl;
-            }
-        } catch (e) {
-            console.warn("Using Direct UPI QR fallback:", e);
-        }
-
-        // Start Checking Payment Status (Polling every 3 seconds)
-        pollPaymentStatus(dynamicOrderId);
-    }
-
-    // --- 3. CHECK PAYMENT STATUS ---
-    function pollPaymentStatus(orderId) {
-        if (paymentPollInterval) clearInterval(paymentPollInterval);
-
-        paymentPollInterval = setInterval(async () => {
-            try {
-                const res = await fetch(`/api/check-status?orderId=${orderId}`);
-                const data = await res.json();
-
-                if (data && (data.status === "PAID" || data.status === "SUCCESS")) {
-                    clearInterval(paymentPollInterval);
-                    clearInterval(countdownTimer);
-
-                    if (telegramBtn) {
-                        telegramBtn.style.display = "block";
-                        telegramBtn.href = data.telegramLink || "#";
-                    }
-                    if (timerElem) {
-                        timerElem.innerText = "PAYMENT CONFIRMED ✅";
-                        timerElem.style.color = "#10b981";
-                    }
-                }
-            } catch (err) {
-                // Polling fails silently until success
-            }
-        }, 3000);
-    }
-
-    // --- 4. BUTTON CLICK LISTENERS ---
-    triggerButtons.forEach(btn => {
-        if (btn) btn.addEventListener("click", initPayment);
+    openTriggers.forEach(btn => {
+        if (btn) btn.addEventListener("click", initSupabasePayment);
     });
 
     if (closePayBtn) {
         closePayBtn.addEventListener("click", () => {
             if (payOverlay) payOverlay.style.display = "none";
-            if (countdownTimer) clearInterval(countdownTimer);
-            if (paymentPollInterval) clearInterval(paymentPollInterval);
-        });
-    }
-
-    if (openJoinBtn && joinModal) {
-        openJoinBtn.addEventListener("click", () => {
-            joinModal.style.display = "flex";
-        });
-    }
-
-    if (closeModalBtn && joinModal) {
-        closeModalBtn.addEventListener("click", () => {
-            joinModal.style.display = "none";
+            if (timerInterval) clearInterval(timerInterval);
+            if (pollInterval) clearInterval(pollInterval);
         });
     }
 });
