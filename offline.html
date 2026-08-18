@@ -843,7 +843,7 @@
     }
 
     try {
-      const fetchPromise = fetch("/.netlify/functions/create-order", {
+      const fetchPromise = fetch("https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ amount: 199 }) 
