@@ -1062,19 +1062,24 @@
         });
     }
 </script>
-<!-- Font Awesome Icons -->
+<!-- Font Awesome Icons (Icons Display) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        .pay-redirecting-state {
+        /* Image 2 - Green Loading State Style */
+        .btn-loading-green {
             background: #00c853 !important;
             background-color: #00c853 !important;
             color: #ffffff !important;
             border: none !important;
-            box-shadow: 0 0 25px rgba(0, 200, 83, 0.5) !important;
+            box-shadow: 0 4px 20px rgba(0, 200, 83, 0.45) !important;
             pointer-events: none !important;
-            transform: scale(0.98) !important;
-            transition: all 0.2s ease !important;
+            cursor: wait !important;
+            transition: all 0.25s ease !important;
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
     </style>
 
@@ -1090,28 +1095,36 @@
         let timerInterval = null;
 
         // பிரதான கிளிக் செயல்பாடு
-        window.initiateSmartCheckout = async function(e) {
-            if (e && e.preventDefault) e.preventDefault();
+        window.initiateSmartCheckout = async function(btnEl) {
+            // பட்டனைக் கண்டறிதல்
+            let targetBtn = null;
+            if (btnEl && btnEl.nodeType) {
+                targetBtn = btnEl;
+            } else {
+                targetBtn = document.getElementById('ctaSection') || 
+                            document.querySelector('.cta-btn') || 
+                            document.querySelector('.pay-btn') || 
+                            document.querySelector('button') || 
+                            document.querySelector('.cta-container');
+            }
 
-            // பக்கத்தில் உள்ள அனைத்து Pay / CTA பட்டன்களையும் கண்டறிதல்
-            const allPayBtns = document.querySelectorAll('.cta-btn, .pay-btn, #ctaSection, .cta-container, [onclick*="initiateSmartCheckout"]');
-            const targetBtn = (e && e.currentTarget) ? e.currentTarget : (allPayBtns[0] || document.body);
-            
-            const originalHTML = targetBtn.innerHTML;
-            const originalBg = targetBtn.style.background;
+            let originalHTML = "";
+            let originalBg = "";
+            if (targetBtn) {
+                originalHTML = targetBtn.innerHTML;
+                originalBg = targetBtn.style.background;
 
-            // 1. உடனடியாக பட்டனை "PLEASE WAIT... Redirecting to Payment Page" ஆக மாற்றுதல்
-            allPayBtns.forEach(btn => {
-                btn.classList.add('pay-redirecting-state');
-                btn.innerHTML = `
-                    <div style="width: 100%; text-align: center; padding: 12px 0; color: #ffffff !important; font-family: inherit;">
-                        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 3px;">PLEASE WAIT...</div>
-                        <div style="font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; color: #ffffff !important;">
+                // 1. Image 2: பட்டன் உடனடியாக பச்சை நிற "PLEASE WAIT... Redirecting to Payment Page" ஆக மாறும்
+                targetBtn.classList.add('btn-loading-green');
+                targetBtn.innerHTML = `
+                    <div style="width: 100%; text-align: center; padding: 10px 0; color: #ffffff !important; font-family: inherit;">
+                        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 3px; color: #ffffff;">PLEASE WAIT...</div>
+                        <div style="font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; color: #ffffff;">
                             <i class="fa-solid fa-lock" style="font-size: 16px;"></i> Redirecting to Payment Page
                         </div>
                     </div>
                 `;
-            });
+            }
 
             try {
                 const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
@@ -1122,54 +1135,54 @@
 
                 const data = await res.json();
 
-                if (data.success && (data.qrCode || data.upiString)) {
+                if (data.success && (data.qrCode || data.qrImage || data.upiString)) {
                     currentOrderId = data.orderId;
                     currentClientTxnId = data.clientTxnId;
 
-                    // பாதுகாப்பான 8-இலக்க எண் Order ID
+                    // பாதுகாப்பான 8-இலக்க எண் Order ID (டாக்குமெண்டேஷன் படி)
                     let safeDisplayOrderId = String(currentOrderId).replace(/\D/g, '').slice(-8);
                     if (!safeDisplayOrderId || safeDisplayOrderId.length < 5) {
                         safeDisplayOrderId = String(Math.floor(10000000 + Math.random() * 90000000));
                     }
 
-                    // High Contrast Clean Dynamic QR
-                    let finalQrImage = data.qrCode;
-                    if (data.upiString) {
+                    // Dynamic QR Image URL
+                    let finalQrImage = data.qrCode || data.qrImage;
+                    if (!finalQrImage && data.upiString) {
                         finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(data.upiString)}`;
                     }
 
-                    // பட்டன் நிலையை இயல்புநிலைக்கு மாற்றி கார்டைத் திறத்தல்
+                    // 800ms தாமதத்திற்குப் பிறகு பச்சை பட்டனை மீட்டுக்கொண்டு Image 3 கார்டைத் திறத்தல்
                     setTimeout(() => {
-                        allPayBtns.forEach(btn => {
-                            btn.classList.remove('pay-redirecting-state');
-                            btn.innerHTML = originalHTML;
-                            btn.style.background = originalBg;
-                        });
+                        if (targetBtn) {
+                            targetBtn.classList.remove('btn-loading-green');
+                            targetBtn.innerHTML = originalHTML;
+                            targetBtn.style.background = originalBg;
+                        }
                         displayPixelPerfectModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
                         startPaymentStatusCheck(currentOrderId, currentClientTxnId);
                     }, 800);
 
                 } else {
-                    allPayBtns.forEach(btn => {
-                        btn.classList.remove('pay-redirecting-state');
-                        btn.innerHTML = originalHTML;
-                        btn.style.background = originalBg;
-                    });
+                    if (targetBtn) {
+                        targetBtn.classList.remove('btn-loading-green');
+                        targetBtn.innerHTML = originalHTML;
+                        targetBtn.style.background = originalBg;
+                    }
                     alert(data.error || "Payment Gateway Error. Please try again.");
                 }
 
             } catch (err) {
                 console.error("Payment Error:", err);
-                allPayBtns.forEach(btn => {
-                    btn.classList.remove('pay-redirecting-state');
-                    btn.innerHTML = originalHTML;
-                    btn.style.background = originalBg;
-                });
+                if (targetBtn) {
+                    targetBtn.classList.remove('btn-loading-green');
+                    targetBtn.innerHTML = originalHTML;
+                    targetBtn.style.background = originalBg;
+                }
                 alert("Payment Gateway Error. Please try again.");
             }
         };
 
-        // 2. சரியான ஸ்கிரீன்ஷாட் வடிவமைப்பு கொண்ட செக்அவுட் கார்டு
+        // 2. Image 3 - Exact Pixel-Perfect White Card Modal UI
         function displayPixelPerfectModal(qrSrc, amt, displayOrderId) {
             const existing = document.getElementById('dynamic-qr-modal');
             if (existing) existing.remove();
@@ -1177,19 +1190,20 @@
             const modal = document.createElement('div');
             modal.id = 'dynamic-qr-modal';
             modal.style.cssText = `
-                position: fixed; inset: 0; background: rgba(10, 12, 18, 0.86);
+                position: fixed; inset: 0; background: rgba(10, 12, 18, 0.85);
                 display: flex; align-items: center; justify-content: center;
-                z-index: 9999999; backdrop-filter: blur(6px); padding: 14px;
+                z-index: 9999999; backdrop-filter: blur(5px); padding: 14px;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 transition: opacity 0.4s ease;
             `;
 
             modal.innerHTML = `
                 <div id="checkout-card-box" style="
-                    background: #ffffff; width: 100%; max-width: 365px;
+                    background: #ffffff; width: 100%; max-width: 360px;
                     border-radius: 26px; padding: 22px 18px 18px 18px; text-align: center;
                     color: #1a1a1a; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-                    position: relative; transition: all 0.5s ease;
+                    position: relative; animation: modalFadeIn 0.3s ease;
+                    transition: all 0.5s ease;
                 ">
                     <!-- Top Green Banner -->
                     <div style="
@@ -1204,9 +1218,9 @@
                     </div>
 
                     <!-- Title -->
-                    <div style="font-size: 18px; font-weight: 800; color: #0b1528; margin-bottom: 14px;">Scan to Pay</div>
+                    <div style="font-size: 19px; font-weight: 800; color: #0b1528; margin-bottom: 14px;">Scan to Pay</div>
 
-                    <!-- Clean QR Display -->
+                    <!-- Dynamic QR Display -->
                     <div style="display: flex; justify-content: center; margin-bottom: 18px;">
                         <img src="${qrSrc}" alt="Payment QR" style="width: 195px; height: 195px; display: block; border-radius: 4px;">
                     </div>
@@ -1229,7 +1243,7 @@
                         margin: 10px 0 14px 0;
                     ">5:00</div>
 
-                    <!-- Telegram Blue Box -->
+                    <!-- Telegram Blue Info Box -->
                     <div style="
                         background: #ebf3ff; border-radius: 14px; padding: 12px 14px;
                         display: flex; align-items: center; gap: 12px; text-align: left;
@@ -1263,10 +1277,10 @@
             `;
 
             document.body.appendChild(modal);
-            startTimer(300);
+            startTimer(300); // 5 நிமிடம் (300 விநாடிகள்)
         }
 
-        // 3. 5-நிமிட டைமர் & மறைவு விளைவு
+        // 3. 5-Minute Timer & Automatic Vanish Effect
         function startTimer(duration) {
             if (timerInterval) clearInterval(timerInterval);
             let timer = duration;
@@ -1282,6 +1296,7 @@
                     timerDisplay.textContent = `${minutes}:${seconds < 10 ? "0" + seconds : seconds}`;
                 }
 
+                // 5 நிமிடம் முடிந்தவுடன் நிகழும் அனிமேஷன் மற்றும் தானியங்கி மறைவு
                 if (--timer < 0) {
                     clearInterval(timerInterval);
                     if (pollInterval) clearInterval(pollInterval);
@@ -1292,8 +1307,8 @@
                     }
 
                     if (cardBox) {
-                        cardBox.style.opacity = "0.3";
-                        cardBox.style.filter = "grayscale(80%)";
+                        cardBox.style.opacity = "0.25";
+                        cardBox.style.filter = "grayscale(85%)";
                         cardBox.style.transform = "scale(0.96)";
                         cardBox.insertAdjacentHTML('afterbegin', `
                             <div style="position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); background: rgba(225,29,72,0.95); color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 13px; font-weight: 800; z-index: 100; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 80%;">
@@ -1305,14 +1320,14 @@
                     setTimeout(() => {
                         if (fullModal) {
                             fullModal.style.opacity = "0";
-                            setTimeout(() => fullModal.remove(), 400);
+                            setTimeout(() => fullModal.remove(), 450);
                         }
                     }, 2200);
                 }
             }, 1000);
         }
 
-        // 4. Status Check & Telegram Redirection
+        // 4. Auto Polling & Telegram Redirection
         function startPaymentStatusCheck(orderId, clientTxnId) {
             if (pollInterval) clearInterval(pollInterval);
 
@@ -1357,18 +1372,11 @@
                         }, 1500);
                     }
                 } catch (e) {
-                    console.log("Polling status check error:", e);
+                    console.log("Polling error:", e);
                 }
             }, 3000);
         }
-
-        // பக்கத்தில் உள்ள அனைத்து Pay பட்டன்களுக்கும் தானாக Listener இணைத்தல்
-        document.addEventListener("DOMContentLoaded", () => {
-            const btns = document.querySelectorAll('.cta-btn, .pay-btn, #ctaSection, .cta-container, [onclick*="initiateSmartCheckout"]');
-            btns.forEach(b => {
-                b.removeAttribute("onclick");
-                b.addEventListener("click", window.initiateSmartCheckout);
-            });
-        });
     })();
     </script>
+    </body>
+</html>
