@@ -607,7 +607,7 @@
 
     <div class="fixed-bottom-section">
         <div class="cta-wrapper">
-            <div class="cta-container" id="open-payment-page">
+            <div class="cta-container" id="open-payment-page" onclick="initiateSmartCheckout()"></div>
                 <div class="cta-left">
                     <h2>JOIN PRIVATE TELEGRAM GROUP</h2>
                     <div class="price-row">
@@ -798,9 +798,9 @@
 <!-- 2. Timer & Payment API Script -->
 <script>
 (() => {
-    const TOTAL_DURATION_SECONDS = 5 * 60; // 5 நிமிடங்கள்
+    const TOTAL_DURATION_SECONDS = 10; // 👉 10 விநாடிகள் மட்டுமே ஓடும்
     const STORAGE_KEY_TARGET = 'global_checkout_timer_target';
-    const BASE_AMOUNT = 199.00; // உங்கள் உண்மையான தொகை
+    const BASE_AMOUNT = 199.00; 
 
     let timerInterval = null;
 
@@ -858,18 +858,17 @@
         }, 1000);
     }
 
-    // 3. நேரம் முடிந்ததும் Session Expired ஆக்கும் UI
+    // 3. நேரம் முடிந்ததும் Expired ஆகும் UI
     function handleTokenExpired() {
         localStorage.removeItem(STORAGE_KEY_TARGET);
         
-        // திரையில் நேரடியாக Expired மெசேஜ் காட்டுதல்
         const overlay = document.createElement('div');
         overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
         overlay.innerHTML = `
             <div style="text-align: center; padding: 25px;">
                 <div style="font-size: 50px; margin-bottom: 10px;">⏳</div>
                 <h3 style="margin: 0 0 10px 0;">Offer Expired</h3>
-                <p style="color: #bbb; margin-bottom: 20px;">Your 5-minute window has closed.</p>
+                <p style="color: #bbb; margin-bottom: 20px;">Your time window has closed.</p>
                 <button onclick="location.reload()" style="padding: 12px 25px; background: #00c853; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Refresh Offer</button>
             </div>
         `;
@@ -882,6 +881,13 @@
 
     // 4. Pay பட்டனை அழுத்தினால் நடக்கும் செயல்பாடு
     window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
+        console.log("Pay Button Clicked! Processing..."); // பட்டன் வேலை செய்கிறதா என செக் செய்ய
+        
+        // லோடிங் காட்ட
+        const payBtn = document.querySelector('.join-btn span') || document.querySelector('.join-btn');
+        const originalText = payBtn ? payBtn.innerText : '';
+        if (payBtn) payBtn.innerText = "Processing...";
+
         let amountToSend = BASE_AMOUNT;
 
         if (isRetryWithPaisa) {
@@ -893,7 +899,6 @@
         }
 
         try {
-            // சுபாபேஸ் API Call
             const response = await fetch('https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -904,27 +909,30 @@
 
             if (!response.ok || (data.detail && data.detail.includes('High volume'))) {
                 if (!isRetryWithPaisa) {
-                    console.warn("High volume... Retrying with Paisa...");
+                    console.warn("Retrying with Paisa...");
                     return window.initiateSmartCheckout(true);
                 }
                 throw new Error("Gateway busy");
             }
 
-            // வெற்றி பெற்றால் QR கோடைத் திரையில் காட்டுதல் (இதுதான் முன்பு மிஸ் ஆனது)
+            // வெற்றி பெற்றால் QR கோடை காட்டுதல்
             if (data.success && data.qrImage) {
+                if (payBtn) payBtn.innerText = originalText;
                 showQRCodeUI(data.qrImage, amountToSend, data.orderId);
             } else {
+                if (payBtn) payBtn.innerText = originalText;
                 alert("QR Code Error! Please try again.");
             }
 
         } catch (error) {
             console.error("Order Failed:", error);
+            if (payBtn) payBtn.innerText = originalText;
             window.resetToOriginalPrice();
             alert("Payment gateway error. Please try again.");
         }
     };
 
-    // 5. QR கோடைப் பாப்-அப் ஆகக் காட்டும் UI டிசைன்
+    // 5. QR கோடைப் பாப்-அப் ஆகக் காட்டும் டிசைன்
     function showQRCodeUI(qrImage, amount, orderId) {
         const existing = document.getElementById('vyapar-qr-overlay');
         if (existing) existing.remove();
