@@ -26,7 +26,7 @@ serve(async (req) => {
       );
     }
 
-    // 1. Order Status Polling Request வந்தால்
+    // Status Check
     if (reqBody.action === "check_status" && (reqBody.order_id || reqBody.client_txn_id)) {
       const statusRes = await fetch("https://vyapargateway.com/api/v1/check_order_status", {
         method: "POST",
@@ -52,7 +52,6 @@ serve(async (req) => {
       );
     }
 
-    // 2. Create Order Request
     const numAmount = parseFloat(reqBody.amount || "199");
     const clientTxnId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
@@ -63,13 +62,11 @@ serve(async (req) => {
       p_info: "Telegram VIP Access",
       customer_name: "Member",
       customer_email: "support@telegram.com",
-      customer_mobile: "9999999999",
+      customer_mobile: "9876543210",
       callback_url: "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/webhook",
       redirect_url: "https://t.me",
       udf1: "vip_access"
     };
-
-    console.log("Sending Create Order Payload:", JSON.stringify(payload));
 
     const vyaparRes = await fetch("https://vyapargateway.com/api/v1/create_order", {
       method: "POST",
@@ -80,23 +77,22 @@ serve(async (req) => {
       body: JSON.stringify(payload)
     });
 
-    const resText = await vyaparRes.text();
-    console.log("Raw Vyapar Response:", resText);
-
-    let vyaparData: any = {};
-    try {
-      vyaparData = JSON.parse(resText);
-    } catch {
-      vyaparData = { raw: resText };
-    }
+    const vyaparData = await vyaparRes.json();
+    console.log("Vyapar Response Data:", JSON.stringify(vyaparData));
 
     if (vyaparData?.status === true && vyaparData?.data) {
+      // Base64 QR அல்லது நேரடி Standard UPI QR Server
+      let finalQr = vyaparData.data.qr_code;
+      if (!finalQr && vyaparData.data.upi_string) {
+        finalQr = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(vyaparData.data.upi_string)}`;
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
           orderId: vyaparData.data.order_id,
           clientTxnId: clientTxnId,
-          qrCode: vyaparData.data.qr_code,
+          qrCode: finalQr,
           upiString: vyaparData.data.upi_string,
           upiIntent: vyaparData.data.upi_intent
         }),
@@ -106,7 +102,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: vyaparData?.msg || "Failed to create order",
+          error: vyaparData?.msg || "Gateway Error",
           detail: vyaparData
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
