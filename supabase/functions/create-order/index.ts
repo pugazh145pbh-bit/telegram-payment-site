@@ -18,10 +18,10 @@ serve(async (req) => {
       reqBody = {};
     }
 
-    const apiKey = Deno.env.get("VYAPAR_API_KEY");
+    const apiKey = (Deno.env.get("VYAPAR_API_KEY") || "").trim();
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: "VYAPAR_API_KEY missing in Secrets" }),
+        JSON.stringify({ success: false, error: "API Key missing in Supabase Secrets" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
@@ -30,40 +30,28 @@ serve(async (req) => {
     const clientTxnId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
     const payload = {
-      key: apiKey.trim(),
+      key: apiKey,
       client_txn_id: clientTxnId,
       amount: orderAmount,
       p_info: "Telegram VIP Access",
       customer_name: "Customer",
       customer_email: "support@telegram.com",
-      customer_mobile: "9999999999",
+      customer_mobile: "9876543210",
       redirect_url: "https://t.me",
       udf1: "telegram"
     };
 
-    console.log("Sending payload to Vyapar Gateway:", JSON.stringify(payload));
+    console.log("Sending payload:", JSON.stringify(payload));
 
-    // Vyapar Gateway Live Endpoints (Fallback முறை)
-    let vyaparRes = await fetch("https://api.vyapargateway.com/api/v1/create_order", {
+    const vyaparRes = await fetch("https://merchant.vyapargateway.com/api/create_order", {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Authorization": `Bearer ${apiKey}`,
+        "x-api-key": apiKey
       },
       body: JSON.stringify(payload),
     });
-
-    // முதல் URL தவறானால் 2வது URL-ஐ அழைக்கும்
-    if (!vyaparRes.ok || vyaparRes.status === 404) {
-      vyaparRes = await fetch("https://api.vyapargateway.com/create_order", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Accept": "application/json"
-        },
-        body: JSON.stringify(payload),
-      });
-    }
 
     const resText = await vyaparRes.text();
     console.log("Raw Vyapar Response:", resText);
@@ -71,23 +59,22 @@ serve(async (req) => {
     let vyaparData: any = {};
     try {
       vyaparData = JSON.parse(resText);
-    } catch (e) {
+    } catch {
       vyaparData = { raw: resText };
     }
 
     let qrImage = vyaparData?.data?.qr_image || 
                   vyaparData?.data?.qr_code || 
                   vyaparData?.data?.intent_url || 
-                  vyaparData?.data?.payment_url ||
-                  vyaparData?.qr_image;
+                  vyaparData?.data?.payment_url;
 
-    if (qrImage && !qrImage.startsWith("http") && !qrImage.startsWith("data:image")) {
+    if (qrImage && (qrImage.startsWith("upi://") || !qrImage.startsWith("http"))) {
       qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrImage)}`;
     }
 
     const finalOrderId = vyaparData?.data?.order_id || clientTxnId;
 
-    if (qrImage || vyaparData?.status === true || vyaparData?.success === true) {
+    if (qrImage || vyaparData?.status === true) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -101,7 +88,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: vyaparData?.msg || vyaparData?.message || "Gateway Error",
+          error: vyaparData?.msg || "Unauthorized / Invalid Key",
           detail: vyaparData
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
@@ -109,7 +96,6 @@ serve(async (req) => {
     }
 
   } catch (error: any) {
-    console.error("Critical Function Error:", error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
