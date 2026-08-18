@@ -1065,59 +1065,88 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    // --- 1. CONFIG & PRICING ---
-    const CURRENT_PRICE = "₹199";
-    const DYNAMIC_PRICE_NUM = 199.00;
+    // --- 1. CONFIGURATION ---
+    const UPI_ID = "your-upi-id@okaxis"; // உங்கள் UPI ID-ஐ இங்கே மாற்றவும்
+    const RECEIVER_NAME = "Indhuja";
+    const AMOUNT = "199.00";
 
-    const dynamicPriceElem = document.getElementById("dynamicPrice");
-    const amountDisplayElem = document.getElementById("amountDisplay");
-
-    if (dynamicPriceElem) dynamicPriceElem.innerText = CURRENT_PRICE;
-    if (amountDisplayElem) amountDisplayElem.innerText = `₹ ${DYNAMIC_PRICE_NUM.toFixed(2)}`;
-
-    // --- 2. MODAL & OVERLAY HANDLERS ---
     const payOverlay = document.getElementById("payment-page");
-    const joinModal = document.getElementById("join-modal-overlay");
+    const qrImage = document.getElementById("qrImage");
+    const orderIdDisplay = document.getElementById("orderIdDisplay");
+    const amountDisplay = document.getElementById("amountDisplay");
+    const payTimerElem = document.getElementById("pay-timer");
 
-    const openPayTriggers = [
+    let payCountdownInterval = null;
+
+    // --- 2. DYNAMIC QR & ORDER ID GENERATOR ---
+    function setupDynamicPayment() {
+        // Generate Unique Dynamic Order ID
+        const orderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
+        if (orderIdDisplay) orderIdDisplay.innerText = orderId;
+        if (amountDisplay) amountDisplay.innerText = `₹ ${AMOUNT}`;
+
+        // UPI Intent URL format with dynamic Order ID & Amount
+        const upiUrl = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(RECEIVER_NAME)}&am=${AMOUNT}&cu=INR&tn=${encodeURIComponent(orderId)}`;
+        
+        // Generate Live Dynamic QR Code via QR Server API
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`;
+        if (qrImage) {
+            qrImage.src = qrApiUrl;
+        }
+
+        // Start 5-minute countdown
+        startPayTimer(5 * 60);
+    }
+
+    // --- 3. TIME UP / COUNTDOWN LOGIC ---
+    function startPayTimer(durationInSeconds) {
+        if (payCountdownInterval) clearInterval(payCountdownInterval);
+
+        let remaining = durationInSeconds;
+
+        payCountdownInterval = setInterval(() => {
+            const minutes = Math.floor(remaining / 60);
+            const seconds = remaining % 60;
+
+            if (payTimerElem) {
+                payTimerElem.innerText = `${minutes}:${String(seconds).padStart(2, '0')}`;
+            }
+
+            if (remaining <= 0) {
+                clearInterval(payCountdownInterval);
+                if (payTimerElem) {
+                    payTimerElem.innerText = "TIME EXPIRED";
+                    payTimerElem.style.color = "#ff0000";
+                }
+                alert("Payment session expired. Please reopen and try again.");
+                if (payOverlay) payOverlay.style.display = "none";
+            }
+
+            remaining--;
+        }, 1000);
+    }
+
+    // --- 4. OPEN / CLOSE EVENTS ---
+    const openButtons = [
         document.getElementById("open-payment-page"),
         document.getElementById("ctaSection"),
         document.getElementById("open-pay-slide-3")
     ];
 
-    const openJoinBtn = document.getElementById("open-join-modal");
-    const closePayBtn = document.getElementById("close-pay-btn");
-    const closeModalBtn = document.getElementById("close-modal-btn");
-
-    function openPayModal() {
-        if (payOverlay) {
-            payOverlay.style.display = "flex";
-            // Generate Random Order ID
-            const orderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
-            const orderElem = document.getElementById("orderIdDisplay");
-            if (orderElem) orderElem.innerText = orderId;
+    openButtons.forEach(btn => {
+        if (btn) {
+            btn.addEventListener("click", () => {
+                if (payOverlay) payOverlay.style.display = "flex";
+                setupDynamicPayment();
+            });
         }
-    }
-
-    openPayTriggers.forEach(btn => {
-        if (btn) btn.addEventListener("click", openPayModal);
     });
 
+    const closePayBtn = document.getElementById("close-pay-btn");
     if (closePayBtn) {
         closePayBtn.addEventListener("click", () => {
             if (payOverlay) payOverlay.style.display = "none";
-        });
-    }
-
-    if (openJoinBtn && joinModal) {
-        openJoinBtn.addEventListener("click", () => {
-            joinModal.style.display = "flex";
-        });
-    }
-
-    if (closeModalBtn && joinModal) {
-        closeModalBtn.addEventListener("click", () => {
-            joinModal.style.display = "none";
+            if (payCountdownInterval) clearInterval(payCountdownInterval);
         });
     }
 });
