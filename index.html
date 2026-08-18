@@ -1064,111 +1064,63 @@
 </script>
 
 <script>
-(() => {
-    const DEFAULT_DURATION_SECONDS = 5 * 60; // 5 நிமிடங்கள் (300 விநாடிகள்)
-    const STORAGE_KEY = 'site_countdown_target_time';
+document.addEventListener("DOMContentLoaded", () => {
+    // --- 1. CONFIG & PRICING ---
+    const CURRENT_PRICE = "₹199";
+    const DYNAMIC_PRICE_NUM = 199.00;
 
-    let timerInterval = null;
+    const dynamicPriceElem = document.getElementById("dynamicPrice");
+    const amountDisplayElem = document.getElementById("amountDisplay");
 
-    // UI-ல் நேரத்தை 0 தாமதத்துடன் உடனே புதுப்பிக்கும் ஃபங்ஷன்
-    function renderTimer(secondsRemaining) {
-        const hrsElem = document.getElementById('hrs');
-        const minsElem = document.getElementById('mins');
-        const secsElem = document.getElementById('secs');
+    if (dynamicPriceElem) dynamicPriceElem.innerText = CURRENT_PRICE;
+    if (amountDisplayElem) amountDisplayElem.innerText = `₹ ${DYNAMIC_PRICE_NUM.toFixed(2)}`;
 
-        const safeSecs = Math.max(0, Math.floor(secondsRemaining));
-        const hrs = Math.floor(safeSecs / 3600);
-        const mins = Math.floor((safeSecs % 3600) / 60);
-        const secs = safeSecs % 60;
+    // --- 2. MODAL & OVERLAY HANDLERS ---
+    const payOverlay = document.getElementById("payment-page");
+    const joinModal = document.getElementById("join-modal-overlay");
 
-        if (hrsElem) hrsElem.innerText = String(hrs).padStart(2, '0');
-        if (minsElem) minsElem.innerText = String(mins).padStart(2, '0');
-        if (secsElem) secsElem.innerText = String(secs).padStart(2, '0');
-    }
+    const openPayTriggers = [
+        document.getElementById("open-payment-page"),
+        document.getElementById("ctaSection"),
+        document.getElementById("open-pay-slide-3")
+    ];
 
-    // புதிய டைமரை உருவாக்குதல்
-    function resetAndSetNewTimer() {
-        const now = Math.floor(Date.now() / 1000);
-        const targetTime = now + DEFAULT_DURATION_SECONDS;
-        localStorage.setItem(STORAGE_KEY, targetTime);
-        return targetTime;
-    }
+    const openJoinBtn = document.getElementById("open-join-modal");
+    const closePayBtn = document.getElementById("close-pay-btn");
+    const closeModalBtn = document.getElementById("close-modal-btn");
 
-    // முக்கிய டைமர் இயக்கும் ஃபங்ஷன்
-    function startRealtimeTimer() {
-        if (timerInterval) clearInterval(timerInterval);
-
-        const now = Math.floor(Date.now() / 1000);
-        let storedTarget = localStorage.getItem(STORAGE_KEY);
-
-        // பேஜ் ரீஃப்ரெஷ் ஆகும்போது புதிய அனிமேஷன் தேவைப்பட்டால் அல்லது டைமர் இல்லாவிட்டால்
-        const navEntries = performance.getEntriesByType('navigation');
-        const isPageRefreshed = navEntries.length > 0 && navEntries[0].type === 'reload';
-
-        // Pay UI பக்கத்தில் இருந்து ரீஃப்ரெஷ் செய்தால் புதிய நேரத்திற்கு ரீசெட் செய்யும்
-        if (isPageRefreshed && window.location.pathname.includes('pay')) {
-            storedTarget = resetAndSetNewTimer();
-        } else if (!storedTarget) {
-            storedTarget = resetAndSetNewTimer();
-        } else {
-            storedTarget = parseInt(storedTarget, 10);
+    function openPayModal() {
+        if (payOverlay) {
+            payOverlay.style.display = "flex";
+            // Generate Random Order ID
+            const orderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
+            const orderElem = document.getElementById("orderIdDisplay");
+            if (orderElem) orderElem.innerText = orderId;
         }
-
-        let remaining = storedTarget - now;
-
-        // நேரம் முடிந்துவிட்டால் (0 விநாடிகள் அல்லது எக்ஸ்பைரி)
-        if (remaining <= 0) {
-            renderTimer(0);
-            localStorage.removeItem(STORAGE_KEY);
-            handleOfferExpiry();
-            return;
-        }
-
-        // 1. தாமதம் இன்றி முதல் விநாடியிலேயே ஸ்கிரீனில் நேரத்தைக் காட்டுதல்
-        renderTimer(remaining);
-
-        // 2. தொடர்ச்சியான பின்னணி ரன்
-        timerInterval = setInterval(() => {
-            const currentSeconds = Math.floor(Date.now() / 1000);
-            const currentRemaining = storedTarget - currentSeconds;
-
-            if (currentRemaining <= 0) {
-                clearInterval(timerInterval);
-                renderTimer(0);
-                localStorage.removeItem(STORAGE_KEY);
-                handleOfferExpiry();
-            } else {
-                renderTimer(currentRemaining);
-            }
-        }, 1000);
     }
 
-    // நேரம் முடிந்ததும் செய்ய வேண்டிய நடவடிக்கை
-    function handleOfferExpiry() {
-        console.warn("Session expired. Offer time ended.");
-        // தேவைப்பட்டால் எக்ஸ்பைரி பேஜுக்கு மாற்ற அல்லது புதுப்பிக்க:
-        // window.location.href = "offline.html"; 
-    }
-
-    // பயனர் Pay UI-லிருந்து Back வரும்போது உடனடியாக ஒத்திசைவு செய்ய
-    window.addEventListener('pageshow', () => {
-        startRealtimeTimer();
+    openPayTriggers.forEach(btn => {
+        if (btn) btn.addEventListener("click", openPayModal);
     });
 
-    // விசிபிலிட்டி மாறும்போது (Tab Switch / Return)
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            startRealtimeTimer();
-        }
-    });
-
-    // DOM தயாரான உடனேயே இயக்குதல்
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startRealtimeTimer);
-    } else {
-        startRealtimeTimer();
+    if (closePayBtn) {
+        closePayBtn.addEventListener("click", () => {
+            if (payOverlay) payOverlay.style.display = "none";
+        });
     }
-})();
+
+    if (openJoinBtn && joinModal) {
+        openJoinBtn.addEventListener("click", () => {
+            joinModal.style.display = "flex";
+        });
+    }
+
+    if (closeModalBtn && joinModal) {
+        closeModalBtn.addEventListener("click", () => {
+            joinModal.style.display = "none";
+        });
+    }
+});
 </script>
 </body>
 </html>
