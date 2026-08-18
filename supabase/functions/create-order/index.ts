@@ -26,29 +26,31 @@ serve(async (req) => {
       );
     }
 
-    const orderAmount = String(reqBody.amount || 199);
+    const numAmount = parseFloat(reqBody.amount || "199");
     const clientTxnId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
+    // VyaparGateway Documentation-க்கு ஏற்ற சரியான Payload
     const payload = {
       key: apiKey,
       client_txn_id: clientTxnId,
-      amount: orderAmount,
+      amount: numAmount,
       p_info: "Telegram VIP Access",
       customer_name: "Customer",
       customer_email: "support@telegram.com",
-      customer_mobile: "9876543210",
+      customer_mobile: "9999999999",
       redirect_url: "https://t.me",
+      callback_url: "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/webhook",
       udf1: "telegram"
     };
 
-    console.log("Sending payload:", JSON.stringify(payload));
+    console.log("Sending payload to Vyapar:", JSON.stringify(payload));
 
-    const vyaparRes = await fetch("https://merchant.vyapargateway.com/api/create_order", {
+    // சரியான அதிகாரப்பூர்வ URL
+    const vyaparRes = await fetch("https://vyapargateway.com/api/v1/create_order", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "x-api-key": apiKey
+        "X-API-Key": apiKey,
       },
       body: JSON.stringify(payload),
     });
@@ -63,24 +65,18 @@ serve(async (req) => {
       vyaparData = { raw: resText };
     }
 
-    let qrImage = vyaparData?.data?.qr_image || 
-                  vyaparData?.data?.qr_code || 
-                  vyaparData?.data?.intent_url || 
-                  vyaparData?.data?.payment_url;
+    if (vyaparData?.status === true && vyaparData?.data) {
+      const qrCode = vyaparData.data.qr_code;
+      const orderId = vyaparData.data.order_id || clientTxnId;
+      const paymentUrl = vyaparData.data.payment_url || vyaparData.data.upi_string;
 
-    if (qrImage && (qrImage.startsWith("upi://") || !qrImage.startsWith("http"))) {
-      qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrImage)}`;
-    }
-
-    const finalOrderId = vyaparData?.data?.order_id || clientTxnId;
-
-    if (qrImage || vyaparData?.status === true) {
       return new Response(
         JSON.stringify({
           success: true,
-          orderId: finalOrderId,
-          qrImage: qrImage,
-          paymentUrl: vyaparData?.data?.payment_url
+          orderId: orderId,
+          qrImage: qrCode,
+          paymentUrl: paymentUrl,
+          upiIntent: vyaparData.data.upi_intent
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -88,7 +84,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: vyaparData?.msg || "Unauthorized / Invalid Key",
+          error: vyaparData?.msg || "Gateway Error",
           detail: vyaparData
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
