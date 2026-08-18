@@ -955,6 +955,7 @@
     </div>
 </div>
 
+<!-- 1. Gradient Background Script -->
 <script type="module">
     import { NeatGradient } from "https://cdn.jsdelivr.net/npm/@firecms/neat@1.1.0/+esm";
 
@@ -1063,14 +1064,16 @@
     }
 </script>
 
+<!-- 2. Timer & Payment API Script -->
 <script>
 (() => {
-    const TOTAL_DURATION_SECONDS = 5 * 60; // 5 நிமிடங்கள் (300 விநாடிகள்)
+    const TOTAL_DURATION_SECONDS = 5 * 60; // 5 நிமிடங்கள்
     const STORAGE_KEY_TARGET = 'global_checkout_timer_target';
+    const BASE_AMOUNT = 199.00; // உங்கள் அடிப்படைத் தொகை
 
     let timerInterval = null;
 
-    // 1. UI-ல் நேரத்தை எந்தத் தாமதமுமின்றி (0-Delay) உடனடியாகக் காட்டுதல்
+    // --- 1. Timer UI Update ---
     function renderTimerUI(secondsRemaining) {
         const hrsElem = document.getElementById('hrs');
         const minsElem = document.getElementById('mins');
@@ -1086,14 +1089,13 @@
         if (secsElem) secsElem.innerText = String(secs).padStart(2, '0');
     }
 
-    // 2. பின்னணியிலும் தொடர்ச்சியாக இயங்கும் டைமர் லாஜிக்
+    // --- 2. Background Non-Stop Timer ---
     function startNonStopTimer() {
         if (timerInterval) clearInterval(timerInterval);
 
         const now = Math.floor(Date.now() / 1000);
         let targetTimestamp = localStorage.getItem(STORAGE_KEY_TARGET);
 
-        // முதல்முறை வரும்போது 5 நிமிட இலக்கு நேரத்தை அமைத்தல்
         if (!targetTimestamp) {
             targetTimestamp = now + TOTAL_DURATION_SECONDS;
             localStorage.setItem(STORAGE_KEY_TARGET, targetTimestamp);
@@ -1103,17 +1105,14 @@
 
         let remaining = targetTimestamp - now;
 
-        // 5 நிமிடங்கள் முடிந்துவிட்டால் Session / Token Expire ஆக்குதல்
         if (remaining <= 0) {
             renderTimerUI(0);
             handleTokenExpired();
             return;
         }
 
-        // முதல் மில்லி விநாடியிலேயே தாமதமின்றி UI-ல் ரெண்டர் செய்தல்
         renderTimerUI(remaining);
 
-        // விநாடிக்கு ஒருமுறை பின்னணியில் நேரத்தை அப்டேட் செய்தல்
         timerInterval = setInterval(() => {
             const currentNow = Math.floor(Date.now() / 1000);
             const currentRemaining = targetTimestamp - currentNow;
@@ -1128,11 +1127,9 @@
         }, 1000);
     }
 
-    // 3. நேரம் முடிந்ததும் (5 min over) Token Expired செய்தி காட்டுதல்
+    // --- 3. Token Expired UI ---
     function handleTokenExpired() {
         localStorage.removeItem(STORAGE_KEY_TARGET);
-
-        // பேமெண்ட் / செக்-அவுட் மாடலில் எக்ஸ்பைரி மெசேஜ் காட்டுதல்
         const payContainer = document.getElementById('checkout-container') || document.querySelector('.checkout-box');
         if (payContainer) {
             payContainer.innerHTML = `
@@ -1146,19 +1143,67 @@
         }
     }
 
-    // பயனர் பேமெண்ட் பக்கத்திற்குச் சென்றுவிட்டு Back வரும்போது தடையின்றித் தொடர
+    // --- 4. Payment Cancel/Abort Reset ---
+    window.resetToOriginalPrice = function() {
+        localStorage.removeItem('active_paisa_offset');
+        console.log("Reset back to base amount ₹199.00");
+    };
+
+    // --- 5. Supabase Payment Fetch API (இங்கு தான் URL உள்ளது) ---
+    window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
+        let amountToSend = BASE_AMOUNT;
+
+        if (isRetryWithPaisa) {
+            // பல யூசர்கள் வந்தால் ₹199.01, ₹199.02 என மாறும்
+            const offset = (Math.floor(Math.random() * 90) + 1) / 100;
+            amountToSend = parseFloat((BASE_AMOUNT + offset).toFixed(2));
+            localStorage.setItem('active_paisa_offset', offset);
+        } else {
+            localStorage.removeItem('active_paisa_offset');
+        }
+
+        try {
+            // உங்களின் Supabase Edge Function URL
+            const response = await fetch('https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: amountToSend })
+            });
+
+            const data = await response.json();
+
+            // Gateway Reject செய்தால் ஆட்டோ-ரீட்ரை செய்யும் லாஜிக்
+            if (!response.ok || (data.detail && data.detail.includes('High volume'))) {
+                if (!isRetryWithPaisa) {
+                    console.warn("High volume hit. Auto-switching to paisa variation...");
+                    return window.initiateSmartCheckout(true);
+                }
+                throw new Error(data.detail || "Gateway busy");
+            }
+
+            // வெற்றி பெற்றால் QR கோடை காட்டுதல்
+            if (typeof handleOrderSuccess === 'function') {
+                handleOrderSuccess(data);
+            } else {
+                console.log("Order Created Successfully", data);
+            }
+
+        } catch (error) {
+            console.error("Order Failed:", error);
+            window.resetToOriginalPrice();
+        }
+    };
+
+    // --- 6. Event Listeners ---
     window.addEventListener('pageshow', () => {
+        window.resetToOriginalPrice();
         startNonStopTimer();
     });
 
-    // பிரவுசர் டேப் அல்லது ஆப் மாற்றிவிட்டுத் திரும்பும்போது
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            startNonStopTimer();
-        }
+        if (!document.hidden) startNonStopTimer();
     });
 
-    // பக்கம் லோட் ஆன முதல் கணமே இயக்குதல்
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', startNonStopTimer);
     } else {
@@ -1166,5 +1211,3 @@
     }
 })();
 </script>
-</body>
-</html>
