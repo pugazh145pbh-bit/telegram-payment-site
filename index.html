@@ -1067,7 +1067,7 @@
 <!-- 2. Timer & Payment API Script -->
 <script>
 (() => {
-    const TOTAL_DURATION_SECONDS = 10; // 👉 10 விநாடிகள் மட்டுமே ஓடும்
+    const TOTAL_DURATION_SECONDS = 10; // 10 விநாடிகள் டைமர்
     const STORAGE_KEY_TARGET = 'global_checkout_timer_target';
     const BASE_AMOUNT = 199.00; 
 
@@ -1127,21 +1127,20 @@
         }, 1000);
     }
 
-    // 3. நேரம் முடிந்ததும் Expired ஆகும் UI
+    // 3. உங்களின் பழைய UI டிசைன் (Old UI Expired Logic)
     function handleTokenExpired() {
         localStorage.removeItem(STORAGE_KEY_TARGET);
-        
-        const overlay = document.createElement('div');
-        overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
-        overlay.innerHTML = `
-            <div style="text-align: center; padding: 25px;">
-                <div style="font-size: 50px; margin-bottom: 10px;">⏳</div>
-                <h3 style="margin: 0 0 10px 0;">Offer Expired</h3>
-                <p style="color: #bbb; margin-bottom: 20px;">Your time window has closed.</p>
-                <button onclick="location.reload()" style="padding: 12px 25px; background: #00c853; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Refresh Offer</button>
-            </div>
-        `;
-        document.body.appendChild(overlay);
+        const payContainer = document.getElementById('checkout-container') || document.querySelector('.checkout-box');
+        if (payContainer) {
+            payContainer.innerHTML = `
+                <div style="text-align: center; padding: 25px 15px; color: #ff4d4d; font-family: sans-serif;">
+                    <div style="font-size: 32px; margin-bottom: 8px;">⏳</div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 20px;">Session Expired</h3>
+                    <p style="color: #bbb; font-size: 14px; margin: 0 0 15px 0;">Payment token timed out. Please initiate payment again.</p>
+                    <button onclick="location.reload()" style="padding: 10px 22px; background: #00c853; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Refresh Offer</button>
+                </div>
+            `;
+        }
     }
 
     window.resetToOriginalPrice = function() {
@@ -1150,13 +1149,6 @@
 
     // 4. Pay பட்டனை அழுத்தினால் நடக்கும் செயல்பாடு
     window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
-        console.log("Pay Button Clicked! Processing..."); // பட்டன் வேலை செய்கிறதா என செக் செய்ய
-        
-        // லோடிங் காட்ட
-        const payBtn = document.querySelector('.join-btn span') || document.querySelector('.join-btn');
-        const originalText = payBtn ? payBtn.innerText : '';
-        if (payBtn) payBtn.innerText = "Processing...";
-
         let amountToSend = BASE_AMOUNT;
 
         if (isRetryWithPaisa) {
@@ -1178,51 +1170,25 @@
 
             if (!response.ok || (data.detail && data.detail.includes('High volume'))) {
                 if (!isRetryWithPaisa) {
-                    console.warn("Retrying with Paisa...");
                     return window.initiateSmartCheckout(true);
                 }
                 throw new Error("Gateway busy");
             }
 
-            // வெற்றி பெற்றால் QR கோடை காட்டுதல்
-            if (data.success && data.qrImage) {
-                if (payBtn) payBtn.innerText = originalText;
-                showQRCodeUI(data.qrImage, amountToSend, data.orderId);
+            // வெற்றி பெற்றால் உங்களின் பழைய UI / Checkout Page-ஐ ஓபன் செய்யும் லாஜிக்
+            if (data.payment_url) {
+                window.location.href = data.payment_url;
+            } else if (typeof handleOrderSuccess === 'function') {
+                handleOrderSuccess(data);
             } else {
-                if (payBtn) payBtn.innerText = originalText;
-                alert("QR Code Error! Please try again.");
+                console.log("Order Successful:", data);
             }
 
         } catch (error) {
             console.error("Order Failed:", error);
-            if (payBtn) payBtn.innerText = originalText;
             window.resetToOriginalPrice();
-            alert("Payment gateway error. Please try again.");
         }
     };
-
-    // 5. QR கோடைப் பாப்-அப் ஆகக் காட்டும் டிசைன்
-    function showQRCodeUI(qrImage, amount, orderId) {
-        const existing = document.getElementById('vyapar-qr-overlay');
-        if (existing) existing.remove();
-
-        const overlay = document.createElement('div');
-        overlay.id = "vyapar-qr-overlay";
-        overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:99999; display:flex; flex-direction:column; align-items:center; justify-content:center; color:white; font-family:sans-serif;";
-        overlay.innerHTML = `
-            <div style="background:#fff; color:#000; padding:25px; border-radius:15px; text-align:center; width:85%; max-width:350px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                <h2 style="margin:0 0 5px 0; font-size:22px; color:#333;">Scan to Pay</h2>
-                <h1 style="margin:0 0 15px 0; color:#00c853; font-size:32px;">₹${amount}</h1>
-                <div style="background:#f9f9f9; padding:10px; border-radius:10px; display:inline-block;">
-                    <img src="${qrImage}" style="width:200px; height:200px; display:block; margin:0 auto;">
-                </div>
-                <p style="margin:15px 0 5px 0; font-size:13px; color:#666;">Order ID: ${orderId}</p>
-                <p style="margin:0 0 20px 0; font-size:12px; color:#ff4444; font-weight:bold;">Do not close this page until paid!</p>
-                <button onclick="document.getElementById('vyapar-qr-overlay').remove()" style="padding:12px 20px; background:#111; color:#fff; border:none; border-radius:8px; cursor:pointer; width:100%; font-size:16px; font-weight:bold;">Cancel Payment</button>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-    }
 
     window.addEventListener('pageshow', () => {
         window.resetToOriginalPrice();
