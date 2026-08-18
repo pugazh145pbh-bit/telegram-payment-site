@@ -793,242 +793,214 @@
             gradient.yOffset = window.scrollY;
         });
     }
-</script>
+<!-- உங்களின் பழைய Chat Script இதற்கு மேலே அப்படியே இருக்க வேண்டும் -->
 
-<!-- 2. Timer & Payment API Script -->
 <script>
-  let currentOrderId = null;
-  let payTimerInterval = null;
-  let pollInterval = null;
-  let isRequestPending = false;
-  let offerInterval = null;
-
-  document.addEventListener("DOMContentLoaded", () => {
-    const prices = document.querySelectorAll(".price-new, #dynamicPrice");
-    prices.forEach(p => p.textContent = "₹5");
-  });
-
-  let offerSeconds = 10;
-  function runOfferCountdown() {
-    const secElements = [
-      document.getElementById("timer"),      
-      document.getElementById("secs"),       
-      document.getElementById("off-sec"),    
-      document.getElementById("sec")
-    ].filter(Boolean);
-
-    offerInterval = setInterval(() => {
-      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
-      const isModalActive = payPage && payPage.classList.contains("active");
-
-      if (!isModalActive && !isRequestPending) {
-        offerSeconds--;
+(() => {
+    // ========================================================
+    // 1. FLOATING SPICY EMOJIS (வலதுபுறம் மிதக்கும் எமோஜிக்கள்)
+    // ========================================================
+    function startFloatingEmojis() {
+        const emojis = ['🔥', '🥵', '😈', '💦', '🍑', '😍', '🫦'];
         
-        secElements.forEach((el) => {
-          let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
-          if (el.id === "timer") {
-              el.textContent = "00:" + formattedSec; 
-          } else {
-              el.textContent = formattedSec; 
-          }
-        });
-      }
+        setInterval(() => {
+            const emojiEl = document.createElement('div');
+            emojiEl.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+            
+            // வலதுபுறத்தில் Random இடம்
+            const rightOffset = Math.floor(Math.random() * 30) + 15; 
+            // Chat Box-க்கு சற்று மேலே தொடங்கும்
+            const startBottom = Math.floor(Math.random() * 20) + 90; 
+            
+            emojiEl.style.cssText = `
+                position: fixed;
+                bottom: ${startBottom}px;
+                right: ${rightOffset}px;
+                font-size: ${Math.floor(Math.random() * 12) + 18}px;
+                pointer-events: none;
+                z-index: 99999;
+                opacity: 1;
+                transform: translateY(0) scale(1);
+                transition: transform 2.5s ease-out, opacity 2.5s ease-out;
+            `;
+            
+            document.body.appendChild(emojiEl);
+            
+            // மிதக்கும் அனிமேஷன் (மேலே செல்லும்)
+            setTimeout(() => {
+                emojiEl.style.transform = 'translateY(-' + (Math.floor(Math.random() * 150) + 150) + 'px) scale(1.5)';
+                emojiEl.style.opacity = '0';
+            }, 50);
+            
+            // அனிமேஷன் முடிந்ததும் அழித்துவிட
+            setTimeout(() => {
+                emojiEl.remove();
+            }, 2500);
+        }, 600); // 0.6 செகண்டுக்கு ஒருமுறை புதிய Emoji வரும்
+    }
 
-      if (offerSeconds <= 0 && !isModalActive && !isRequestPending) {
-        clearInterval(offerInterval);
-        const path = window.location.pathname.toLowerCase();
-        
-        if (path.includes("offline")) {
-          window.location.href = "index.html"; 
-        } else if (path.includes("page2")) {
-          window.location.href = "offline.html";
+    // ========================================================
+    // 2. 10-SEC TIMER & BOTTOM CHECKOUT LOGIC
+    // ========================================================
+    const TOTAL_DURATION_SECONDS = 10;
+    const STORAGE_KEY_TARGET = 'global_checkout_timer_target';
+    const BASE_AMOUNT = 199.00; 
+    let timerInterval = null;
+
+    function renderTimerUI(secondsRemaining) {
+        const hrsElem = document.getElementById('hrs');
+        const minsElem = document.getElementById('mins');
+        const secsElem = document.getElementById('secs');
+
+        const safeSecs = Math.max(0, Math.floor(secondsRemaining));
+        const hrs = Math.floor(safeSecs / 3600);
+        const mins = Math.floor((safeSecs % 3600) / 60);
+        const secs = safeSecs % 60;
+
+        if (hrsElem) hrsElem.innerText = String(hrs).padStart(2, '0');
+        if (minsElem) minsElem.innerText = String(mins).padStart(2, '0');
+        if (secsElem) secsElem.innerText = String(secs).padStart(2, '0');
+    }
+
+    function startNonStopTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+
+        const now = Math.floor(Date.now() / 1000);
+        let targetTimestamp = localStorage.getItem(STORAGE_KEY_TARGET);
+
+        if (!targetTimestamp) {
+            targetTimestamp = now + TOTAL_DURATION_SECONDS;
+            localStorage.setItem(STORAGE_KEY_TARGET, targetTimestamp);
         } else {
-          window.location.href = "page2.html";
+            targetTimestamp = parseInt(targetTimestamp, 10);
         }
-      }
-    }, 1000);
-  }
-  runOfferCountdown();
 
-  function startPayTimer(durationSeconds) {
-    clearInterval(payTimerInterval);
-    let timer = durationSeconds;
-    const display = document.getElementById("pay-timer") || document.querySelector(".pay-timer");
+        let remaining = targetTimestamp - now;
 
-    if (display) display.textContent = "5:00"; 
+        if (remaining <= 0) {
+            renderTimerUI(0);
+            handleTokenExpired();
+            return;
+        }
 
-    payTimerInterval = setInterval(() => {
-      const minutes = Math.floor(timer / 60);
-      const seconds = timer % 60;
-      if (display) {
-        display.textContent = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
-      }
-      if (--timer < 0) {
-        clearInterval(payTimerInterval);
-        if (pollInterval) clearInterval(pollInterval);
-        if (display) display.textContent = "0:00 - Expired";
+        renderTimerUI(remaining);
 
-        setTimeout(() => {
-          closePayment();
-          currentOrderId = null; 
-          
-          const path = window.location.pathname.toLowerCase();
-          if (path.includes("offline")) {
-            window.location.href = "index.html"; 
-          } else if (path.includes("page2")) {
-            window.location.href = "offline.html";
-          } else {
-            window.location.href = "page2.html";
-          }
-        }, 1200);
-      }
-    }, 1000);
-  }
+        timerInterval = setInterval(() => {
+            const currentNow = Math.floor(Date.now() / 1000);
+            const currentRemaining = targetTimestamp - currentNow;
 
-  async function startPayment() {
-    // ரெக்வெஸ்ட் போய்க்கொண்டிருக்கும்போது மீண்டும் கிளிக் செய்வதைத் தடுக்க
-    if (isRequestPending) return;
-    isRequestPending = true;
-
-    // ஒவ்வொரு கிளிக்கும் புதிய QR கோடு! பழைய தரவுகளை அழிக்கிறோம்.
-    currentOrderId = null;
-    if (payTimerInterval) clearInterval(payTimerInterval);
-    if (pollInterval) clearInterval(pollInterval);
-    if (offerInterval) clearInterval(offerInterval);
-
-    const cta = document.querySelector(".cta-container");
-    if (cta) {
-      const loader = document.createElement("div");
-      loader.id = "inline-loader-overlay";
-      loader.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;background:#1da55a;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;border-radius:inherit;";
-      loader.innerHTML = `
-          <div style="font-size:11px;font-weight:900;letter-spacing:1.5px;margin-bottom:4px;text-transform:uppercase;">PLEASE WAIT...</div>
-          <div style="font-size:15px;font-weight:900;display:flex;align-items:center;gap:6px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17 9V7c0-2.8-2.2-5-5-5S7 4.2 7 7v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V11c0-1.1-.9-2-2-2h-1zM9 7c0-1.7 1.3-3 3-3s3 1.3 3 3v2H9V7z"/></svg>
-              Generating New QR Code...
-          </div>
-      `;
-      cta.appendChild(loader);
+            if (currentRemaining <= 0) {
+                clearInterval(timerInterval);
+                renderTimerUI(0);
+                handleTokenExpired();
+            } else {
+                renderTimerUI(currentRemaining);
+            }
+        }, 1000);
     }
 
-    try {
-      const fetchPromise = fetch("/.netlify/functions/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 5 }) 
-      });
-      const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); 
-
-      const [response] = await Promise.all([fetchPromise, timerPromise]);
-      const data = await response.json();
-      
-      const loader = document.getElementById("inline-loader-overlay");
-      if (loader) loader.remove();
-
-      if (!response.ok || data.error) {
-        alert(data.error || "Gateway rejected. Please try again.");
-        isRequestPending = false; 
-        return; 
-      }
-
-      currentOrderId = data.orderId;
-      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
-      const orderIdDisplay = document.getElementById("orderIdDisplay");
-      const amountDisplay = document.getElementById("amountDisplay");
-      const qrEl = document.getElementById("qrImage");
-
-      if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
-      if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 5) + ".00";
-      if (qrEl && data.qrImage) qrEl.src = data.qrImage;
-
-      if (payPage) {
-        payPage.classList.add("active");
-        payPage.style.display = "flex";
-      }
-
-      startPayTimer(300); // 5 நிமிடம்
-
-      pollInterval = setInterval(checkPaymentStatus, 3000);
-
-    } catch (err) {
-      console.error("Payment init error:", err);
-      const loader = document.getElementById("inline-loader-overlay");
-      if (loader) loader.remove();
-      alert("Network error. Please check your connection and try again.");
-    } finally {
-      isRequestPending = false;
-    }
-  }
-
-  async function checkPaymentStatus() {
-    if (!currentOrderId) return;
-    try {
-      const response = await fetch("/.netlify/functions/check-order-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: currentOrderId })
-      });
-      const data = await response.json();
-      if (data.status === "paid" && data.telegramLink) {
-        clearInterval(pollInterval);
-        clearInterval(payTimerInterval);
-
-        const confirmBox = document.getElementById("payment-success-box") || document.querySelector(".payment-alert-blue") || document.querySelector(".telegram-icon")?.parentElement;
-        if (confirmBox) {
-          confirmBox.innerHTML = `
-            <a href="${data.telegramLink}" target="_blank" style="display:block; background:#0088cc; color:#fff; padding:15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:bold; font-size:18px; width:100%;">
-              Join Telegram Group Now
-            </a>
-          `;
-        }
+    function handleTokenExpired() {
+        localStorage.removeItem(STORAGE_KEY_TARGET);
+        const currentPath = window.location.pathname;
         
-        const tgBtn = document.getElementById("telegramJoinBtn");
-        if(tgBtn) {
-            tgBtn.href = data.telegramLink;
-            tgBtn.style.display = "block";
+        if (currentPath.includes('page2.html')) {
+            window.location.href = 'offline.html';
+        } else if (currentPath.includes('offline.html')) {
+            window.location.href = 'index.html';
+        } else {
+            window.location.href = 'page2.html';
         }
-      }
-    } catch (e) {
-      console.log("Status check polling:", e);
     }
-  }
 
-  function closePayment() {
-    const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
-    if (payPage) {
-      payPage.classList.remove("active");
-      payPage.style.display = "none";
+    window.resetToOriginalPrice = function() {
+        localStorage.removeItem('active_paisa_offset');
+    };
+
+    window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
+        const payBtnText = document.querySelector('.cta-left h2');
+        const originalText = payBtnText ? payBtnText.innerText : 'Loading...';
+        if (payBtnText) payBtnText.innerText = "Processing...";
+
+        let amountToSend = BASE_AMOUNT;
+
+        if (isRetryWithPaisa) {
+            const offset = (Math.floor(Math.random() * 90) + 1) / 100;
+            amountToSend = parseFloat((BASE_AMOUNT + offset).toFixed(2));
+            localStorage.setItem('active_paisa_offset', offset);
+        } else {
+            localStorage.removeItem('active_paisa_offset');
+        }
+
+        try {
+            const response = await fetch('https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: amountToSend })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || (data.detail && data.detail.includes('High volume'))) {
+                if (!isRetryWithPaisa) {
+                    return window.initiateSmartCheckout(true);
+                }
+                throw new Error("Gateway busy");
+            }
+
+            if (payBtnText) payBtnText.innerText = originalText;
+
+            if (data.success && data.qrImage) {
+                showBottomCheckout(data.qrImage, amountToSend, data.orderId);
+            } else {
+                alert("QR Code Error!");
+            }
+
+        } catch (error) {
+            console.error("Order Failed:", error);
+            if (payBtnText) payBtnText.innerText = originalText;
+            window.resetToOriginalPrice();
+            alert("Payment gateway error. Please try again.");
+        }
+    };
+
+    function showBottomCheckout(qr, amt, id) {
+        const old = document.getElementById('my-checkout-box');
+        if(old) old.remove();
+
+        const box = document.createElement('div');
+        box.id = "my-checkout-box";
+        box.style.cssText = "position:fixed; bottom:0; left:0; width:100%; background:#0a0a0a; border-top: 1px solid #333; border-radius: 20px 20px 0 0; padding:25px 20px; z-index:999999; text-align:center; color:white; font-family:sans-serif; animation: slideUp 0.3s ease-out; box-shadow: 0 -10px 30px rgba(0,0,0,0.8);";
+        box.innerHTML = `
+            <style>@keyframes slideUp { from { bottom: -100%; } to { bottom: 0; } }</style>
+            <h3 style="margin: 0 0 10px 0; font-size:18px; color:#bbb;">Complete Payment</h3>
+            <h1 style="margin: 0 0 15px 0; font-size:36px; color:#00e676;">₹${amt}</h1>
+            <div style="background:#fff; display:inline-block; padding:12px; border-radius:12px; margin-bottom:15px;">
+                <img src="${qr}" style="width:200px; height:200px; display:block;">
+            </div>
+            <p style="margin: 0 0 20px 0; font-size:12px; color:#666;">Order ID: ${id}</p>
+            <button onclick="document.getElementById('my-checkout-box').remove()" style="width:100%; max-width: 350px; padding:15px; background:#222; color:#fff; border:1px solid #444; border-radius:10px; font-size:16px; font-weight:bold; cursor:pointer;">Cancel</button>
+        `;
+        document.body.appendChild(box);
     }
-    if (payTimerInterval) clearInterval(payTimerInterval);
-    if (pollInterval) clearInterval(pollInterval);
-    currentOrderId = null; // மூடும்போதும் ஆர்டர் ஐடியை அழித்துவிடுகிறோம்
-  }
 
-  function setupTriggers() {
-    const triggers = document.querySelectorAll(
-      ".join-btn, .bottom-bar, .cta-button, #joinBtn, .cta-container, #open-payment-page, #ctaSection, #open-pay-slide-3"
-    );
-    triggers.forEach((btn) => {
-      btn.onclick = (e) => {
-        e.preventDefault();
-        startPayment();
-      };
+    // Floating Emojis-ஐத் தொடங்க
+    startFloatingEmojis();
+
+    window.addEventListener('pageshow', () => {
+        window.resetToOriginalPrice();
+        startNonStopTimer();
     });
 
-    const closeBtn = document.getElementById("close-pay-btn") || document.querySelector(".close-pay-page");
-    if (closeBtn) {
-      closeBtn.onclick = (e) => {
-        e.preventDefault();
-        closePayment();
-      };
-    }
-  }
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) startNonStopTimer();
+    });
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", setupTriggers);
-  } else {
-    setupTriggers();
-  }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startNonStopTimer);
+    } else {
+        startNonStopTimer();
+    }
+})();
 </script>
 </body>
 </html>
