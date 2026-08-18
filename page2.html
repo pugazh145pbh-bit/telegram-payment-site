@@ -800,7 +800,7 @@
     (() => {
         const BASE_AMOUNT = 199.00;
         const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
-        const TELEGRAM_VIP_LINK = "https://t.me/+qPXnMnSRlJNiZWI1"; // உங்கள் Telegram Invite Link-ஐ இங்கு மாற்றவும்
+        const TELEGRAM_VIP_LINK = "https://t.me/+qPXnMnSRlJNiZWI1";
 
         let currentOrderId = null;
         let currentClientTxnId = null;
@@ -811,7 +811,6 @@
             const btn = document.getElementById('ctaSection') || document.querySelector('.cta-btn') || document.querySelector('.cta-container');
             const originalHTML = btn ? btn.innerHTML : '';
 
-            // 1. பட்டனை "PLEASE WAIT... Redirecting to Payment Page" ஆக மாற்றுதல் (Image 2 Look)
             if (btn) {
                 btn.style.background = '#00c853';
                 btn.style.border = 'none';
@@ -834,19 +833,22 @@
 
                 const data = await res.json();
 
-                const qrSource = data.qrCode || data.qrImage || (data.upiString ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.upiString)}` : null);
-
-                if (data.success && qrSource) {
+                if (data.success && (data.qrCode || data.upiString)) {
                     currentOrderId = data.orderId;
                     currentClientTxnId = data.clientTxnId;
 
-                    // 2. 1 விநாடி தாமதத்திற்குப் பிறகு புதிய UI-ஐத் திறத்தல் (Image 3 Look)
+                    // Standard High Quality QR URL (ஸ்கேன் பிழைகளை முற்றிலும் தவிர்க்கும்)
+                    let finalQrImage = data.qrCode;
+                    if (data.upiString) {
+                        finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(data.upiString)}`;
+                    }
+
                     setTimeout(() => {
                         if (btn) {
                             btn.innerHTML = originalHTML;
                             btn.style.background = '';
                         }
-                        displayCleanPaymentModal(qrSource, BASE_AMOUNT.toFixed(2), currentOrderId);
+                        displayCleanPaymentModal(finalQrImage, BASE_AMOUNT.toFixed(2), currentOrderId, data.upiIntent, data.upiString);
                         startPaymentStatusCheck(currentOrderId, currentClientTxnId);
                     }, 800);
 
@@ -862,8 +864,7 @@
             }
         };
 
-        // 3. Image 3 போன்ற பிரத்யேக வெள்ளை நிற கார்டு UI
-        function displayCleanPaymentModal(qrSrc, amt, orderId) {
+        function displayCleanPaymentModal(qrSrc, amt, orderId, upiIntent, upiString) {
             const existing = document.getElementById('dynamic-qr-modal');
             if (existing) existing.remove();
 
@@ -876,14 +877,17 @@
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             `;
 
+            const gpayUrl = upiIntent?.gpay_link || upiString || "#";
+            const phonepeUrl = upiIntent?.phonepe_link || upiString || "#";
+            const paytmUrl = upiIntent?.paytm_link || upiString || "#";
+
             modal.innerHTML = `
                 <div style="
                     background: #ffffff; width: 100%; max-width: 380px;
                     border-radius: 24px; padding: 20px 18px; text-align: center;
                     color: #1a1a1a; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-                    position: relative; animation: popIn 0.3s ease;
+                    position: relative;
                 ">
-                    <!-- Close Button -->
                     <button onclick="closeQRModal()" style="
                         position: absolute; top: 14px; right: 14px; background: #f0f2f5;
                         border: none; width: 28px; height: 28px; border-radius: 50%;
@@ -891,7 +895,6 @@
                         align-items: center; justify-content: center;
                     ">&times;</button>
 
-                    <!-- Top Notice Banner -->
                     <div style="
                         background: #e8f8f0; border-radius: 12px; padding: 10px 12px;
                         display: flex; align-items: center; gap: 10px; text-align: left;
@@ -903,19 +906,22 @@
                         </div>
                     </div>
 
-                    <!-- Title -->
                     <div style="font-size: 18px; font-weight: 800; color: #0f172a; margin-bottom: 12px;">Scan to Pay</div>
 
-                    <!-- QR Code Frame -->
                     <div style="
                         display: inline-block; padding: 10px; background: #fff;
                         border: 1.5px solid #f1f5f9; border-radius: 16px;
-                        box-shadow: 0 4px 15px rgba(0,0,0,0.04); margin-bottom: 16px;
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.04); margin-bottom: 14px;
                     ">
                         <img src="${qrSrc}" alt="UPI QR Code" style="width: 195px; height: 195px; display: block; border-radius: 8px;">
                     </div>
 
-                    <!-- Order Details Table -->
+                    <div style="display: flex; justify-content: center; gap: 8px; margin-bottom: 14px;">
+                        <a href="${gpayUrl}" style="background:#f1f5f9; color:#1e293b; padding:6px 12px; border-radius:8px; text-decoration:none; font-size:12px; font-weight:700; border:1px solid #e2e8f0;">Open GPay</a>
+                        <a href="${phonepeUrl}" style="background:#f1f5f9; color:#5f259f; padding:6px 12px; border-radius:8px; text-decoration:none; font-size:12px; font-weight:700; border:1px solid #e2e8f0;">PhonePe</a>
+                        <a href="${paytmUrl}" style="background:#f1f5f9; color:#00b9f1; padding:6px 12px; border-radius:8px; text-decoration:none; font-size:12px; font-weight:700; border:1px solid #e2e8f0;">Paytm</a>
+                    </div>
+
                     <div style="margin-bottom: 12px; font-size: 14px; padding: 0 8px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
                             <span style="font-weight: 700; color: #475569;">Order ID:</span>
@@ -927,13 +933,11 @@
                         </div>
                     </div>
 
-                    <!-- Countdown Timer -->
                     <div id="payment-countdown" style="
                         font-size: 24px; font-weight: 800; color: #e11d48;
-                        margin: 10px 0 14px 0; letter-spacing: 0.5px;
+                        margin: 8px 0 12px 0;
                     ">05:00</div>
 
-                    <!-- Telegram Informational Box -->
                     <div style="
                         background: #edf5ff; border-radius: 14px; padding: 12px 14px;
                         display: flex; align-items: center; gap: 12px; text-align: left;
@@ -942,7 +946,7 @@
                         <div style="
                             background: #0088cc; width: 38px; height: 38px; border-radius: 50%;
                             display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-                            color: #fff; font-size: 18px; box-shadow: 0 4px 10px rgba(0,136,204,0.3);
+                            color: #fff; font-size: 18px;
                         ">
                             <i class="fa-brands fa-telegram"></i>
                         </div>
@@ -951,12 +955,11 @@
                         </div>
                     </div>
 
-                    <!-- Bottom UPI Footer -->
                     <div style="font-size: 11px; font-weight: 700; color: #e11d48; margin-bottom: 8px;">
                         Scan & Pay with any UPI Payment App
                     </div>
                     <div style="display: flex; align-items: center; justify-content: center; gap: 10px; opacity: 0.85;">
-                        <span style="font-size: 12px; font-weight: 800; color: #4285f4;"><i class="fa-brands fa-google-pay" style="font-size: 20px;"></i></span>
+                        <i class="fa-brands fa-google-pay" style="font-size: 22px; color: #4285f4;"></i>
                         <span style="font-size: 12px; font-weight: 800; color: #00b9f1;">Paytm</span>
                         <span style="font-size: 12px; font-weight: 800; color: #5f259f;">PhonePe</span>
                         <span style="font-size: 11px; font-weight: 900; color: #0f172a; border: 1px solid #cbd5e1; padding: 1px 4px; border-radius: 4px;">UPI</span>
@@ -967,7 +970,7 @@
             `;
 
             document.body.appendChild(modal);
-            startTimer(300); // 5 நிமிடங்கள் டைமர்
+            startTimer(300);
         }
 
         function startTimer(duration) {
@@ -978,20 +981,12 @@
             timerInterval = setInterval(() => {
                 const minutes = parseInt(timer / 60, 10);
                 const seconds = parseInt(timer % 60, 10);
-
-                const displayMinutes = minutes < 10 ? "0" + minutes : minutes;
-                const displaySeconds = seconds < 10 ? "0" + seconds : seconds;
-
                 if (timerDisplay) {
-                    timerDisplay.textContent = `${displayMinutes}:${displaySeconds}`;
+                    timerDisplay.textContent = `${minutes < 10 ? "0" + minutes : minutes}:${seconds < 10 ? "0" + seconds : seconds}`;
                 }
-
                 if (--timer < 0) {
                     clearInterval(timerInterval);
-                    if (timerDisplay) {
-                        timerDisplay.textContent = "EXPIRED";
-                        timerDisplay.style.color = "#64748b";
-                    }
+                    if (timerDisplay) timerDisplay.textContent = "EXPIRED";
                 }
             }, 1000);
         }
@@ -1039,7 +1034,7 @@
                         }, 1500);
                     }
                 } catch (e) {
-                    console.log("Polling status check error:", e);
+                    console.log("Polling error:", e);
                 }
             }, 3000);
         }
@@ -1052,5 +1047,3 @@
         };
     })();
     </script>
-</body>
-</html>
