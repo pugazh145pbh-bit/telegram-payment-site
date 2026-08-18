@@ -21,38 +21,63 @@ serve(async (req) => {
     const apiKey = (Deno.env.get("VYAPAR_API_KEY") || "").trim();
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ success: false, error: "API Key missing in Supabase Secrets" }),
+        JSON.stringify({ success: false, error: "VYAPAR_API_KEY missing in Secrets" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
 
+    // 1. Order Status Polling Request வந்தால்
+    if (reqBody.action === "check_status" && (reqBody.order_id || reqBody.client_txn_id)) {
+      const statusRes = await fetch("https://vyapargateway.com/api/v1/check_order_status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey
+        },
+        body: JSON.stringify({
+          key: apiKey,
+          order_id: reqBody.order_id,
+          client_txn_id: reqBody.client_txn_id
+        })
+      });
+
+      const statusData = await statusRes.json();
+      return new Response(
+        JSON.stringify({
+          success: true,
+          status: statusData?.data?.status || "pending",
+          data: statusData?.data
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 2. Create Order Request
     const numAmount = parseFloat(reqBody.amount || "199");
     const clientTxnId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
-    // VyaparGateway Documentation-க்கு ஏற்ற சரியான Payload
     const payload = {
       key: apiKey,
       client_txn_id: clientTxnId,
       amount: numAmount,
       p_info: "Telegram VIP Access",
-      customer_name: "Customer",
+      customer_name: "Member",
       customer_email: "support@telegram.com",
       customer_mobile: "9999999999",
-      redirect_url: "https://t.me",
       callback_url: "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/webhook",
-      udf1: "telegram"
+      redirect_url: "https://t.me",
+      udf1: "vip_access"
     };
 
-    console.log("Sending payload to Vyapar:", JSON.stringify(payload));
+    console.log("Sending Create Order Payload:", JSON.stringify(payload));
 
-    // சரியான அதிகாரப்பூர்வ URL
     const vyaparRes = await fetch("https://vyapargateway.com/api/v1/create_order", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": apiKey,
+        "X-API-Key": apiKey
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
 
     const resText = await vyaparRes.text();
@@ -66,16 +91,13 @@ serve(async (req) => {
     }
 
     if (vyaparData?.status === true && vyaparData?.data) {
-      const qrCode = vyaparData.data.qr_code;
-      const orderId = vyaparData.data.order_id || clientTxnId;
-      const paymentUrl = vyaparData.data.payment_url || vyaparData.data.upi_string;
-
       return new Response(
         JSON.stringify({
           success: true,
-          orderId: orderId,
-          qrImage: qrCode,
-          paymentUrl: paymentUrl,
+          orderId: vyaparData.data.order_id,
+          clientTxnId: clientTxnId,
+          qrCode: vyaparData.data.qr_code,
+          upiString: vyaparData.data.upi_string,
           upiIntent: vyaparData.data.upi_intent
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -84,7 +106,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: vyaparData?.msg || "Gateway Error",
+          error: vyaparData?.msg || "Failed to create order",
           detail: vyaparData
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }

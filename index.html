@@ -1067,13 +1067,14 @@
     (() => {
         const BASE_AMOUNT = 199.00;
         const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
-        const SUPABASE_CHECK_STATUS_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/check-order-status";
+        const TELEGRAM_VIP_LINK = "https://t.me/+YOUR_TELEGRAM_LINK"; // உங்கள் Telegram Invite Link-ஐ இங்கு மாற்றவும்
 
         let currentOrderId = null;
+        let currentClientTxnId = null;
         let pollInterval = null;
 
         window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
-            const btnText = document.querySelector('.cta-left h2');
+            const btnText = document.querySelector('.cta-left h2') || document.querySelector('#ctaSection');
             const oldText = btnText ? btnText.innerText : 'JOIN PRIVATE TELEGRAM GROUP';
             if (btnText) btnText.innerText = "Generating QR...";
 
@@ -1092,19 +1093,17 @@
 
                 const data = await res.json();
 
-                if (!res.ok || (data.detail && data.detail.includes('High volume'))) {
-                    if (!isRetryWithPaisa) return window.initiateSmartCheckout(true);
-                    throw new Error("Gateway busy");
-                }
-
                 if (btnText) btnText.innerText = oldText;
 
-                if (data.success && data.qrImage) {
+                const qrSource = data.qrCode || data.qrImage || (data.upiString ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(data.upiString)}` : null);
+
+                if (data.success && qrSource) {
                     currentOrderId = data.orderId;
-                    displayDynamicQRCode(data.qrImage, amountToSend, data.orderId);
-                    startPaymentStatusCheck(data.orderId);
+                    currentClientTxnId = data.clientTxnId;
+                    displayDynamicQRCode(qrSource, amountToSend, data.orderId, data.upiIntent);
+                    startPaymentStatusCheck(data.orderId, data.clientTxnId);
                 } else {
-                    alert("QR Code உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்!");
+                    alert(data.error || "Payment Gateway Error. Please try again.");
                 }
 
             } catch (err) {
@@ -1114,59 +1113,85 @@
             }
         };
 
-        function displayDynamicQRCode(qrSrc, amt, orderId) {
+        function displayDynamicQRCode(qrSrc, amt, orderId, upiIntent) {
             const existing = document.getElementById('dynamic-qr-modal');
             if (existing) existing.remove();
 
             const modal = document.createElement('div');
             modal.id = 'dynamic-qr-modal';
             modal.style.cssText = `
-                position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+                position: fixed; inset: 0; background: rgba(0,0,0,0.88);
                 display: flex; align-items: flex-end; justify-content: center;
-                z-index: 999999; backdrop-filter: blur(5px);
+                z-index: 999999; backdrop-filter: blur(8px);
             `;
+
+            let payButtonsHtml = '';
+            if (upiIntent) {
+                payButtonsHtml = `
+                    <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 14px; flex-wrap: wrap;">
+                        ${upiIntent.gpay_link ? `<a href="${upiIntent.gpay_link}" style="background:#222; color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-size:12px; font-weight:bold; border:1px solid #333;">GPay</a>` : ''}
+                        ${upiIntent.phonepe_link ? `<a href="${upiIntent.phonepe_link}" style="background:#222; color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-size:12px; font-weight:bold; border:1px solid #333;">PhonePe</a>` : ''}
+                        ${upiIntent.paytm_link ? `<a href="${upiIntent.paytm_link}" style="background:#222; color:#fff; padding:8px 14px; border-radius:8px; text-decoration:none; font-size:12px; font-weight:bold; border:1px solid #333;">Paytm</a>` : ''}
+                    </div>
+                `;
+            }
 
             modal.innerHTML = `
                 <div style="
-                    background: #111; width: 100%; max-width: 440px;
+                    background: #121214; width: 100%; max-width: 420px;
                     border-top: 2px solid #00e676; border-radius: 24px 24px 0 0;
                     padding: 24px 20px; text-align: center; color: #fff;
-                    box-shadow: 0 -10px 30px rgba(0,230,118,0.2);
+                    box-shadow: 0 -10px 40px rgba(0,230,118,0.25);
                 ">
-                    <div style="font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Scan & Pay via UPI</div>
-                    <div style="font-size: 32px; font-weight: 800; color: #00e676; margin: 6px 0 16px 0;">₹${amt}</div>
+                    <div style="width: 40px; height: 4px; background: #333; border-radius: 4px; margin: 0 auto 14px auto;"></div>
+                    <div style="font-size: 13px; color: #8e8e93; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Scan & Pay via Any UPI App</div>
+                    <div style="font-size: 32px; font-weight: 800; color: #00e676; margin: 6px 0 14px 0;">₹${amt}</div>
                     
-                    <div style="background: #fff; display: inline-block; padding: 12px; border-radius: 16px; margin-bottom: 12px;">
-                        <img src="${qrSrc}" alt="UPI QR Code" style="width: 200px; height: 200px; display: block; border-radius: 8px;">
+                    <div style="background: #fff; display: inline-block; padding: 12px; border-radius: 16px; margin-bottom: 14px;">
+                        <img src="${qrSrc}" alt="UPI QR Code" style="width: 210px; height: 210px; display: block; border-radius: 8px;">
                     </div>
 
-                    <div style="font-size: 11px; color: #666; margin-bottom: 16px;">Order ID: ${orderId} • Checking payment automatically...</div>
+                    ${payButtonsHtml}
+                    
+                    <div id="pollingStatusText" style="font-size: 12px; color: #a1a1aa; margin-bottom: 16px;">
+                        Waiting for payment • Expires in 2 mins...
+                    </div>
                     
                     <button onclick="closeQRModal()" style="
-                        width: 100%; padding: 14px; background: #222; color: #fff;
-                        border: 1px solid #333; border-radius: 12px; font-size: 15px;
+                        width: 100%; padding: 14px; background: #202024; color: #fff;
+                        border: 1px solid #2e2e34; border-radius: 12px; font-size: 14px;
                         font-weight: bold; cursor: pointer;
-                    ">Close / Cancel</button>
+                    ">Cancel / Close</button>
                 </div>
             `;
             document.body.appendChild(modal);
         }
 
-        function startPaymentStatusCheck(orderId) {
+        function startPaymentStatusCheck(orderId, clientTxnId) {
             if (pollInterval) clearInterval(pollInterval);
 
             pollInterval = setInterval(async () => {
                 try {
-                    const res = await fetch(SUPABASE_CHECK_STATUS_URL, {
+                    const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ orderId: orderId })
+                        body: JSON.stringify({ 
+                            action: "check_status", 
+                            order_id: orderId, 
+                            client_txn_id: clientTxnId 
+                        })
                     });
                     const resData = await res.json();
 
-                    if (resData.status === "paid" && resData.telegramLink) {
+                    if (resData.status === "success" || resData.status === "paid") {
                         clearInterval(pollInterval);
-                        window.location.href = resData.telegramLink;
+                        const statusElem = document.getElementById('pollingStatusText');
+                        if (statusElem) {
+                            statusElem.innerHTML = `<span style="color:#00e676; font-weight:bold;">Payment Verified! Joining Channel...</span>`;
+                        }
+                        setTimeout(() => {
+                            window.location.href = TELEGRAM_VIP_LINK;
+                        }, 1200);
                     }
                 } catch (e) {
                     console.log("Polling error:", e);
