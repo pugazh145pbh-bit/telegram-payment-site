@@ -488,7 +488,7 @@
             <div class="offline-timer-boxes">
                 <div class="offline-time-box"><span class="offline-time-num" id="off-hrs">00</span><span class="offline-time-label">HRS</span></div><span class="offline-colon">:</span>
                 <div class="offline-time-box"><span class="offline-time-num" id="off-min">00</span><span class="offline-time-label">MIN</span></div><span class="offline-colon">:</span>
-                <div class="offline-time-box"><span class="offline-time-num" id="off-sec">00</span><span class="offline-time-label">SEC</span></div>
+                <div class="offline-time-box"><span class="offline-time-num" id="off-sec">10</span><span class="offline-time-label">SEC</span></div>
             </div>
         </div>
         <div class="chat-input"><span>Chat publicly...</span><span>🎁 😊</span></div>
@@ -758,15 +758,14 @@
 
     startPriceCountdown();
 
-    // --- Universal Forward Timer for offline.html (00 -> 10 -> index.html) ---
-    let timeElapsed = 0;
-    const maxDuration = 10;
+    // --- 2. Universal Sync Timer for offline.html (10s -> index.html) ---
+    let timeLeft = 10;
     const offHrs = document.getElementById('off-hrs');
     const offMin = document.getElementById('off-min');
     const offSec = document.getElementById('off-sec');
 
     function updateTimerUI() {
-        let displaySec = timeElapsed < 10 ? "0" + timeElapsed : String(timeElapsed);
+        let displaySec = timeLeft < 10 ? "0" + timeLeft : String(timeLeft);
         if (offHrs) offHrs.innerText = "00";
         if (offMin) offMin.innerText = "00";
         if (offSec) offSec.innerText = displaySec;
@@ -775,12 +774,12 @@
     updateTimerUI();
 
     const pageTimer = setInterval(() => {
-        timeElapsed++;
+        timeLeft--;
         updateTimerUI();
 
-        if (timeElapsed >= maxDuration) {
+        if (timeLeft <= 0) {
             clearInterval(pageTimer);
-            window.location.href = "index.html"; // மீண்டும் index.html-க்கு லூப் ஆகும்
+            window.location.href = "index.html"; // offline -> index loop
         }
     }, 1000);
 
