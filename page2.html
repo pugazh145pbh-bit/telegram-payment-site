@@ -609,7 +609,7 @@
                     <div class="price-row">
                         <span class="price-old">₹899</span>
                         <div class="price-new-container">
-                            <span class="price-new" id="dynamicPrice">₹199</span>
+                            <span class="price-new" id="dynamicPrice">₹899</span>
                             <span class="discount-badge">83% OFF</span>
                         </div>
                     </div>
@@ -888,7 +888,45 @@
 
 <script>
 (() => {
-    // --- 1. Universal Sync Timer for page2.html (10s -> offline.html) ---
+    // --- 1. Instant Smooth Price Countdown (899 -> 199 on Page Open) ---
+    function startPriceCountdown() {
+        const priceElements = document.querySelectorAll('#dynamicPrice, .price-new');
+        if (!priceElements.length) return;
+
+        const startPrice = 899;
+        const endPrice = 199;
+        const duration = 1400; // 1.4 seconds smooth duration
+        const startTime = performance.now();
+
+        function easeOutCubic(x) { 
+            return 1 - Math.pow(1 - x, 3); 
+        }
+
+        function updatePrice(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const currentPrice = Math.floor(startPrice - (startPrice - endPrice) * easeOutCubic(progress));
+
+            priceElements.forEach(el => {
+                el.textContent = '₹' + currentPrice;
+            });
+
+            if (progress < 1) {
+                requestAnimationFrame(updatePrice);
+            } else {
+                priceElements.forEach(el => {
+                    el.textContent = '₹' + endPrice;
+                    el.style.color = "#10b981"; // Vibrant Green highlight
+                });
+            }
+        }
+
+        requestAnimationFrame(updatePrice);
+    }
+
+    startPriceCountdown();
+
+    // --- 2. Universal Sync Timer for page2.html (10s -> offline.html) ---
     let timeLeft = 10;
     const topTimer = document.getElementById('timer');
 
@@ -911,7 +949,7 @@
         }
     }, 1000);
 
-    // --- 2. Payment Gateway Configuration ---
+    // --- 3. Payment Gateway Configuration ---
     const BASE_AMOUNT = 199.00;
     const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
     const TELEGRAM_VIP_LINK = "https://t.me/+qPXnMnSRlJNiZWI1";
@@ -977,7 +1015,7 @@
                         targetBtn.style.background = originalBg;
                     }
                     
-                    clearInterval(pageTimer); // Stops redirect loop when QR opens
+                    clearInterval(pageTimer); // QR திறந்ததும் பக்கம் மாறுவதைத் தடுத்தல்
 
                     displayFullVerticalModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
                     startPaymentStatusCheck(currentOrderId, currentClientTxnId);
@@ -1001,7 +1039,7 @@
         }
     };
 
-    // --- 3. Full Mobile Screen Frame UI ---
+    // --- 4. Full Mobile Screen Frame UI ---
     function displayFullVerticalModal(qrSrc, amt, displayOrderId) {
         const existing = document.getElementById('dynamic-qr-modal');
         if (existing) existing.remove();
