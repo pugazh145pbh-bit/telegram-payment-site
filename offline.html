@@ -736,7 +736,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     const prices = document.querySelectorAll(".price-new, #dynamicPrice");
-    prices.forEach(p => p.textContent = "₹5");
+    prices.forEach(p => p.textContent = "₹199");
   });
 
   let offerSeconds = 10;
@@ -846,7 +846,7 @@
       const fetchPromise = fetch("/.netlify/functions/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 5 }) 
+        body: JSON.stringify({ amount: 199 }) 
       });
       const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); 
 
