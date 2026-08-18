@@ -503,7 +503,7 @@
         <div class="video-overlay">
             <div class="top-stats">
                 <div class="badge" id="topLiveBadge"><div class="live-dot" id="topLiveDot"></div> <span id="topLiveText">LIVE</span></div>
-                <div class="badge" id="timer">00:10</div>
+                <div class="badge" id="timer">00:00</div>
                 <div class="badge" id="pingBadge">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="#3b82f6"><path d="M3 22v-6h4v6H3zm7 0V11h4v11h-4zm7 0V4h4v18h-4z"/></svg>
                     <span class="ping-text" id="ping" style="color:var(--accent-color);">19 ms</span>
@@ -926,12 +926,13 @@
 
     startPriceCountdown();
 
-    // --- 2. Universal Sync Timer for page2.html (10s -> offline.html) ---
-    let timeLeft = 10;
+    // --- Universal Forward Timer for page2.html (00:00 -> 00:10 -> offline.html) ---
+    let timeElapsed = 0;
+    const maxDuration = 10; // 10 விநாடிகளுக்குப் பின் அடுத்த பக்கம்
     const topTimer = document.getElementById('timer');
 
     function updateTimerUI() {
-        let displaySec = timeLeft < 10 ? "0" + timeLeft : String(timeLeft);
+        let displaySec = timeElapsed < 10 ? "0" + timeElapsed : String(timeElapsed);
         if (topTimer) {
             topTimer.innerText = `00:${displaySec}`;
         }
@@ -940,10 +941,10 @@
     updateTimerUI();
 
     const pageTimer = setInterval(() => {
-        timeLeft--;
+        timeElapsed++;
         updateTimerUI();
 
-        if (timeLeft <= 0) {
+        if (timeElapsed >= maxDuration) {
             clearInterval(pageTimer);
             window.location.href = "offline.html";
         }
