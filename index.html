@@ -1064,238 +1064,107 @@
 </script>
 
 <script>
-  let currentOrderId = null;
-  let payTimerInterval = null;
-  let pollInterval = null;
-  let isRequestPending = false;
-  let offerInterval = null;
+(() => {
+    const TOTAL_DURATION_SECONDS = 5 * 60; // 5 நிமிடங்கள் (300 விநாடிகள்)
+    const STORAGE_KEY_TARGET = 'global_checkout_timer_target';
 
-  document.addEventListener("DOMContentLoaded", () => {
-    const prices = document.querySelectorAll(".price-new, #dynamicPrice");
-    prices.forEach(p => p.textContent = "₹199");
-  });
+    let timerInterval = null;
 
-  let offerSeconds = 10;
-  function runOfferCountdown() {
-    const secElements = [
-      document.getElementById("timer"),      
-      document.getElementById("secs"),       
-      document.getElementById("off-sec"),    
-      document.getElementById("sec")
-    ].filter(Boolean);
+    // 1. UI-ல் நேரத்தை எந்தத் தாமதமுமின்றி (0-Delay) உடனடியாகக் காட்டுதல்
+    function renderTimerUI(secondsRemaining) {
+        const hrsElem = document.getElementById('hrs');
+        const minsElem = document.getElementById('mins');
+        const secsElem = document.getElementById('secs');
 
-    offerInterval = setInterval(() => {
-      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
-      const isModalActive = payPage && payPage.classList.contains("active");
+        const safeSecs = Math.max(0, Math.floor(secondsRemaining));
+        const hrs = Math.floor(safeSecs / 3600);
+        const mins = Math.floor((safeSecs % 3600) / 60);
+        const secs = safeSecs % 60;
 
-      if (!isModalActive && !isRequestPending) {
-        offerSeconds--;
-        
-        secElements.forEach((el) => {
-          let formattedSec = offerSeconds < 10 ? "0" + offerSeconds : offerSeconds;
-          if (el.id === "timer") {
-              el.textContent = "00:" + formattedSec; 
-          } else {
-              el.textContent = formattedSec; 
-          }
-        });
-      }
+        if (hrsElem) hrsElem.innerText = String(hrs).padStart(2, '0');
+        if (minsElem) minsElem.innerText = String(mins).padStart(2, '0');
+        if (secsElem) secsElem.innerText = String(secs).padStart(2, '0');
+    }
 
-      if (offerSeconds <= 0 && !isModalActive && !isRequestPending) {
-        clearInterval(offerInterval);
-        const path = window.location.pathname.toLowerCase();
-        
-        if (path.includes("offline")) {
-          window.location.href = "index.html"; 
-        } else if (path.includes("page2")) {
-          window.location.href = "offline.html";
+    // 2. பின்னணியிலும் தொடர்ச்சியாக இயங்கும் டைமர் லாஜிக்
+    function startNonStopTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+
+        const now = Math.floor(Date.now() / 1000);
+        let targetTimestamp = localStorage.getItem(STORAGE_KEY_TARGET);
+
+        // முதல்முறை வரும்போது 5 நிமிட இலக்கு நேரத்தை அமைத்தல்
+        if (!targetTimestamp) {
+            targetTimestamp = now + TOTAL_DURATION_SECONDS;
+            localStorage.setItem(STORAGE_KEY_TARGET, targetTimestamp);
         } else {
-          window.location.href = "page2.html";
+            targetTimestamp = parseInt(targetTimestamp, 10);
         }
-      }
-    }, 1000);
-  }
-  runOfferCountdown();
 
-  function startPayTimer(durationSeconds) {
-    clearInterval(payTimerInterval);
-    let timer = durationSeconds;
-    const display = document.getElementById("pay-timer") || document.querySelector(".pay-timer");
+        let remaining = targetTimestamp - now;
 
-    if (display) display.textContent = "5:00"; 
-
-    payTimerInterval = setInterval(() => {
-      const minutes = Math.floor(timer / 60);
-      const seconds = timer % 60;
-      if (display) {
-        display.textContent = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
-      }
-      if (--timer < 0) {
-        clearInterval(payTimerInterval);
-        if (pollInterval) clearInterval(pollInterval);
-        if (display) display.textContent = "0:00 - Expired";
-
-        setTimeout(() => {
-          closePayment();
-          currentOrderId = null; 
-          
-          const path = window.location.pathname.toLowerCase();
-          if (path.includes("offline")) {
-            window.location.href = "index.html"; 
-          } else if (path.includes("page2")) {
-            window.location.href = "offline.html";
-          } else {
-            window.location.href = "page2.html";
-          }
-        }, 1200);
-      }
-    }, 1000);
-  }
-
-  async function startPayment() {
-    // ரெக்வெஸ்ட் போய்க்கொண்டிருக்கும்போது மீண்டும் கிளிக் செய்வதைத் தடுக்க
-    if (isRequestPending) return;
-    isRequestPending = true;
-
-    // ஒவ்வொரு கிளிக்கும் புதிய QR கோடு! பழைய தரவுகளை அழிக்கிறோம்.
-    currentOrderId = null;
-    if (payTimerInterval) clearInterval(payTimerInterval);
-    if (pollInterval) clearInterval(pollInterval);
-    if (offerInterval) clearInterval(offerInterval);
-
-    const cta = document.querySelector(".cta-container");
-    if (cta) {
-      const loader = document.createElement("div");
-      loader.id = "inline-loader-overlay";
-      loader.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;background:#1da55a;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;border-radius:inherit;";
-      loader.innerHTML = `
-          <div style="font-size:11px;font-weight:900;letter-spacing:1.5px;margin-bottom:4px;text-transform:uppercase;">PLEASE WAIT...</div>
-          <div style="font-size:15px;font-weight:900;display:flex;align-items:center;gap:6px;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M17 9V7c0-2.8-2.2-5-5-5S7 4.2 7 7v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V11c0-1.1-.9-2-2-2h-1zM9 7c0-1.7 1.3-3 3-3s3 1.3 3 3v2H9V7z"/></svg>
-              Generating New QR Code...
-          </div>
-      `;
-      cta.appendChild(loader);
-    }
-
-    try {
-      const fetchPromise = fetch("https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 199 }) 
-      });
-      const timerPromise = new Promise(resolve => setTimeout(resolve, 1000)); 
-
-      const [response] = await Promise.all([fetchPromise, timerPromise]);
-      const data = await response.json();
-      
-      const loader = document.getElementById("inline-loader-overlay");
-      if (loader) loader.remove();
-
-      if (!response.ok || data.error) {
-        alert(data.error || "Gateway rejected. Please try again.");
-        isRequestPending = false; 
-        return; 
-      }
-
-      currentOrderId = data.orderId;
-      const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
-      const orderIdDisplay = document.getElementById("orderIdDisplay");
-      const amountDisplay = document.getElementById("amountDisplay");
-      const qrEl = document.getElementById("qrImage");
-
-      if (orderIdDisplay) orderIdDisplay.textContent = data.numericTxnId || currentOrderId;
-      if (amountDisplay) amountDisplay.textContent = "₹ " + (data.amount || 5) + ".00";
-      if (qrEl && data.qrImage) qrEl.src = data.qrImage;
-
-      if (payPage) {
-        payPage.classList.add("active");
-        payPage.style.display = "flex";
-      }
-
-      startPayTimer(300); // 5 நிமிடம்
-
-      pollInterval = setInterval(checkPaymentStatus, 3000);
-
-    } catch (err) {
-      console.error("Payment init error:", err);
-      const loader = document.getElementById("inline-loader-overlay");
-      if (loader) loader.remove();
-      alert("Network error. Please check your connection and try again.");
-    } finally {
-      isRequestPending = false;
-    }
-  }
-
-  async function checkPaymentStatus() {
-    if (!currentOrderId) return;
-    try {
-      const response = await fetch("/.netlify/functions/check-order-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: currentOrderId })
-      });
-      const data = await response.json();
-      if (data.status === "paid" && data.telegramLink) {
-        clearInterval(pollInterval);
-        clearInterval(payTimerInterval);
-
-        const confirmBox = document.getElementById("payment-success-box") || document.querySelector(".payment-alert-blue") || document.querySelector(".telegram-icon")?.parentElement;
-        if (confirmBox) {
-          confirmBox.innerHTML = `
-            <a href="${data.telegramLink}" target="_blank" style="display:block; background:#0088cc; color:#fff; padding:15px; border-radius:10px; text-align:center; text-decoration:none; font-weight:bold; font-size:18px; width:100%;">
-              Join Telegram Group Now
-            </a>
-          `;
+        // 5 நிமிடங்கள் முடிந்துவிட்டால் Session / Token Expire ஆக்குதல்
+        if (remaining <= 0) {
+            renderTimerUI(0);
+            handleTokenExpired();
+            return;
         }
-        
-        const tgBtn = document.getElementById("telegramJoinBtn");
-        if(tgBtn) {
-            tgBtn.href = data.telegramLink;
-            tgBtn.style.display = "block";
+
+        // முதல் மில்லி விநாடியிலேயே தாமதமின்றி UI-ல் ரெண்டர் செய்தல்
+        renderTimerUI(remaining);
+
+        // விநாடிக்கு ஒருமுறை பின்னணியில் நேரத்தை அப்டேட் செய்தல்
+        timerInterval = setInterval(() => {
+            const currentNow = Math.floor(Date.now() / 1000);
+            const currentRemaining = targetTimestamp - currentNow;
+
+            if (currentRemaining <= 0) {
+                clearInterval(timerInterval);
+                renderTimerUI(0);
+                handleTokenExpired();
+            } else {
+                renderTimerUI(currentRemaining);
+            }
+        }, 1000);
+    }
+
+    // 3. நேரம் முடிந்ததும் (5 min over) Token Expired செய்தி காட்டுதல்
+    function handleTokenExpired() {
+        localStorage.removeItem(STORAGE_KEY_TARGET);
+
+        // பேமெண்ட் / செக்-அவுட் மாடலில் எக்ஸ்பைரி மெசேஜ் காட்டுதல்
+        const payContainer = document.getElementById('checkout-container') || document.querySelector('.checkout-box');
+        if (payContainer) {
+            payContainer.innerHTML = `
+                <div style="text-align: center; padding: 25px 15px; color: #ff4d4d; font-family: sans-serif;">
+                    <div style="font-size: 32px; margin-bottom: 8px;">⏳</div>
+                    <h3 style="margin: 0 0 8px 0; font-size: 20px;">Session Expired</h3>
+                    <p style="color: #bbb; font-size: 14px; margin: 0 0 15px 0;">Payment token timed out. Please initiate payment again.</p>
+                    <button onclick="location.reload()" style="padding: 10px 22px; background: #00c853; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Refresh Offer</button>
+                </div>
+            `;
         }
-      }
-    } catch (e) {
-      console.log("Status check polling:", e);
     }
-  }
 
-  function closePayment() {
-    const payPage = document.getElementById("payment-page") || document.querySelector(".payment-page-overlay");
-    if (payPage) {
-      payPage.classList.remove("active");
-      payPage.style.display = "none";
-    }
-    if (payTimerInterval) clearInterval(payTimerInterval);
-    if (pollInterval) clearInterval(pollInterval);
-    currentOrderId = null; // மூடும்போதும் ஆர்டர் ஐடியை அழித்துவிடுகிறோம்
-  }
-
-  function setupTriggers() {
-    const triggers = document.querySelectorAll(
-      ".join-btn, .bottom-bar, .cta-button, #joinBtn, .cta-container, #open-payment-page, #ctaSection, #open-pay-slide-3"
-    );
-    triggers.forEach((btn) => {
-      btn.onclick = (e) => {
-        e.preventDefault();
-        startPayment();
-      };
+    // பயனர் பேமெண்ட் பக்கத்திற்குச் சென்றுவிட்டு Back வரும்போது தடையின்றித் தொடர
+    window.addEventListener('pageshow', () => {
+        startNonStopTimer();
     });
 
-    const closeBtn = document.getElementById("close-pay-btn") || document.querySelector(".close-pay-page");
-    if (closeBtn) {
-      closeBtn.onclick = (e) => {
-        e.preventDefault();
-        closePayment();
-      };
-    }
-  }
+    // பிரவுசர் டேப் அல்லது ஆப் மாற்றிவிட்டுத் திரும்பும்போது
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            startNonStopTimer();
+        }
+    });
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", setupTriggers);
-  } else {
-    setupTriggers();
-  }
+    // பக்கம் லோட் ஆன முதல் கணமே இயக்குதல்
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startNonStopTimer);
+    } else {
+        startNonStopTimer();
+    }
+})();
 </script>
 </body>
 </html>
