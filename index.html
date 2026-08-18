@@ -1064,129 +1064,127 @@
 </script>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-    // --- SUPABASE EDGE FUNCTION CONFIG ---
-    const SUPABASE_PROJECT_URL = "https://your-supabase-id.supabase.co"; // உங்கள் Supabase URL-ஐ மாற்றவும்
-    const SUPABASE_ANON_KEY = "your-anon-public-key"; // உங்கள் Supabase Anon Key-ஐ மாற்றவும்
+(() => {
+    const BASE_AMOUNT = 199.00;
+    const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
+    const SUPABASE_CHECK_STATUS_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/check-order-status";
 
-    const payOverlay = document.getElementById("payment-page");
-    const qrImgElem = document.getElementById("qrImage");
-    const orderIdElem = document.getElementById("orderIdDisplay");
-    const amountElem = document.getElementById("amountDisplay");
-    const timerElem = document.getElementById("pay-timer");
-    const telegramBtn = document.getElementById("telegramJoinBtn");
-    const closePayBtn = document.getElementById("close-pay-btn");
-
-    let timerInterval = null;
+    let currentOrderId = null;
     let pollInterval = null;
 
-    async function initSupabasePayment() {
-        if (payOverlay) payOverlay.style.display = "flex";
-        if (orderIdElem) orderIdElem.innerText = "Generating...";
-        if (amountElem) amountElem.innerText = "₹ 199.00";
-        if (telegramBtn) telegramBtn.style.display = "none";
+    // 1. Pay பட்டன் கிளிக் செய்யும்போது Dynamic QR உருவாக்கும் செயல்பாடு
+    window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
+        const btnText = document.querySelector('.cta-left h2');
+        const oldText = btnText ? btnText.innerText : 'JOIN PRIVATE TELEGRAM GROUP';
+        if (btnText) btnText.innerText = "Generating QR...";
+
+        let amountToSend = BASE_AMOUNT;
+        if (isRetryWithPaisa) {
+            const offset = (Math.floor(Math.random() * 90) + 1) / 100;
+            amountToSend = parseFloat((BASE_AMOUNT + offset).toFixed(2));
+        }
 
         try {
-            // Call Supabase Edge Function: create-order
-            const response = await fetch(`${SUPABASE_PROJECT_URL}/functions/v1/create-order`, {
+            const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-                },
-                body: JSON.stringify({ amount: 199 })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount: amountToSend })
             });
 
-            const data = await response.json();
+            const data = await res.json();
 
-            if (data && data.order_id) {
-                if (orderIdElem) orderIdElem.innerText = data.order_id;
-                
-                // Vyapar Gateway QR code response mapping
-                if (data.qr_code_url && qrImgElem) {
-                    qrImgElem.src = data.qr_code_url;
-                } else if (data.upi_intent_url && qrImgElem) {
-                    qrImgElem.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data.upi_intent_url)}`;
-                }
-
-                startPayTimer(300);
-                pollPaymentStatus(data.order_id);
+            // High Volume Error வந்தால் தானாக சில பைசாக்கள் கூட்டி மீண்டும் முயற்சிக்கும்
+            if (!res.ok || (data.detail && data.detail.includes('High volume'))) {
+                if (!isRetryWithPaisa) return window.initiateSmartCheckout(true);
+                throw new Error("Gateway busy");
             }
-        } catch (error) {
-            console.error("Supabase create-order function error:", error);
-            if (orderIdElem) orderIdElem.innerText = "Failed to load";
+
+            if (btnText) btnText.innerText = oldText;
+
+            // QR Code கிடைத்தவுடன் திரையில் காட்டி பேமெண்ட் சோதனையைத் தொடங்குதல்
+            if (data.success && data.qrImage) {
+                currentOrderId = data.orderId;
+                displayDynamicQRCode(data.qrImage, amountToSend, data.orderId);
+                startPaymentStatusCheck(data.orderId);
+            } else {
+                alert("QR Code உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்!");
+            }
+
+        } catch (err) {
+            console.error("Payment Error:", err);
+            if (btnText) btnText.innerText = oldText;
+            alert("Payment Gateway Error. Please try again in a few moments.");
         }
+    };
+
+    // 2. Dynamic QR Code-ஐ பாப்-அப் ஆகக் காட்டும் UI
+    function displayDynamicQRCode(qrSrc, amt, orderId) {
+        const existing = document.getElementById('dynamic-qr-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'dynamic-qr-modal';
+        modal.style.cssText = `
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+            display: flex; align-items: flex-end; justify-content: center;
+            z-index: 999999; backdrop-filter: blur(5px);
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background: #111; width: 100%; max-width: 440px;
+                border-top: 2px solid #00e676; border-radius: 24px 24px 0 0;
+                padding: 24px 20px; text-align: center; color: #fff;
+                box-shadow: 0 -10px 30px rgba(0,230,118,0.2);
+            ">
+                <div style="font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Scan & Pay via UPI</div>
+                <div style="font-size: 32px; font-weight: 800; color: #00e676; margin: 6px 0 16px 0;">₹${amt}</div>
+                
+                <div style="background: #fff; display: inline-block; padding: 12px; border-radius: 16px; margin-bottom: 12px;">
+                    <img src="${qrSrc}" alt="UPI QR Code" style="width: 200px; height: 200px; display: block; border-radius: 8px;">
+                </div>
+
+                <div style="font-size: 11px; color: #666; margin-bottom: 16px;">Order ID: ${orderId} • Checking payment automatically...</div>
+                
+                <button onclick="closeQRModal()" style="
+                    width: 100%; padding: 14px; background: #222; color: #fff;
+                    border: 1px solid #333; border-radius: 12px; font-size: 15px;
+                    font-weight: bold; cursor: pointer;
+                ">Close / Cancel</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
     }
 
-    function startPayTimer(duration) {
-        if (timerInterval) clearInterval(timerInterval);
-        let time = duration;
-
-        timerInterval = setInterval(() => {
-            const mins = Math.floor(time / 60);
-            const secs = time % 60;
-            if (timerElem) timerElem.innerText = `${mins}:${String(secs).padStart(2, '0')}`;
-
-            if (time <= 0) {
-                clearInterval(timerInterval);
-                if (pollInterval) clearInterval(pollInterval);
-                if (timerElem) timerElem.innerText = "EXPIRED";
-            }
-            time--;
-        }, 1000);
-    }
-
-    function pollPaymentStatus(orderId) {
+    // 3. யூசர் பணம் செலுத்திவிட்டாரா எனத் தானாகச் சோதிக்கும் லாஜிக் (Webhook / Status Check)
+    function startPaymentStatusCheck(orderId) {
         if (pollInterval) clearInterval(pollInterval);
 
         pollInterval = setInterval(async () => {
             try {
-                // Check payment status from Supabase Table / Webhook response
-                const res = await fetch(`${SUPABASE_PROJECT_URL}/rest/v1/orders?order_id=eq.${orderId}&select=status,invite_link`, {
-                    headers: {
-                        "apikey": SUPABASE_ANON_KEY,
-                        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-                    }
+                const res = await fetch(SUPABASE_CHECK_STATUS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ orderId: orderId })
                 });
-                const orders = await res.json();
+                const resData = await res.json();
 
-                if (orders && orders.length > 0 && orders[0].status === "PAID") {
+                if (resData.status === "paid" && resData.telegramLink) {
                     clearInterval(pollInterval);
-                    clearInterval(timerInterval);
-
-                    if (telegramBtn) {
-                        telegramBtn.style.display = "block";
-                        telegramBtn.href = orders[0].invite_link || "#";
-                    }
-                    if (timerElem) {
-                        timerElem.innerText = "PAID SUCCESSFULLY ✅";
-                        timerElem.style.color = "#10b981";
-                    }
+                    window.location.href = resData.telegramLink; // பேமெண்ட் முடிந்ததும் தானாக டெலிகிராம் லிங்க்கிற்குச் செல்லும்
                 }
             } catch (e) {
-                // Polling retry
+                console.log("Polling error:", e);
             }
-        }, 3000);
+        }, 3000); // 3 விநாடிகளுக்கு ஒருமுறை செக் செய்யும்
     }
 
-    const openTriggers = [
-        document.getElementById("open-payment-page"),
-        document.getElementById("ctaSection"),
-        document.getElementById("open-pay-slide-3")
-    ];
-
-    openTriggers.forEach(btn => {
-        if (btn) btn.addEventListener("click", initSupabasePayment);
-    });
-
-    if (closePayBtn) {
-        closePayBtn.addEventListener("click", () => {
-            if (payOverlay) payOverlay.style.display = "none";
-            if (timerInterval) clearInterval(timerInterval);
-            if (pollInterval) clearInterval(pollInterval);
-        });
-    }
-});
+    window.closeQRModal = function() {
+        const modal = document.getElementById('dynamic-qr-modal');
+        if (modal) modal.remove();
+        if (pollInterval) clearInterval(pollInterval);
+    };
+})();
 </script>
 </body>
 </html>

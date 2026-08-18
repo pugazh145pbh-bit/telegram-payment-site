@@ -796,109 +796,125 @@
 
 <script>
 (() => {
-    const DEFAULT_DURATION_SECONDS = 5 * 60; // 5 நிமிடங்கள் (300 விநாடிகள்)
-    const STORAGE_KEY = 'site_countdown_target_time';
+    const BASE_AMOUNT = 199.00;
+    const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
+    const SUPABASE_CHECK_STATUS_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/check-order-status";
 
-    let timerInterval = null;
+    let currentOrderId = null;
+    let pollInterval = null;
 
-    // UI-ல் நேரத்தை 0 தாமதத்துடன் உடனே புதுப்பிக்கும் ஃபங்ஷன்
-    function renderTimer(secondsRemaining) {
-        const hrsElem = document.getElementById('hrs');
-        const minsElem = document.getElementById('mins');
-        const secsElem = document.getElementById('secs');
+    // 1. Pay பட்டன் கிளிக் செய்யும்போது Dynamic QR உருவாக்கும் செயல்பாடு
+    window.initiateSmartCheckout = async function(isRetryWithPaisa = false) {
+        const btnText = document.querySelector('.cta-left h2');
+        const oldText = btnText ? btnText.innerText : 'JOIN PRIVATE TELEGRAM GROUP';
+        if (btnText) btnText.innerText = "Generating QR...";
 
-        const safeSecs = Math.max(0, Math.floor(secondsRemaining));
-        const hrs = Math.floor(safeSecs / 3600);
-        const mins = Math.floor((safeSecs % 3600) / 60);
-        const secs = safeSecs % 60;
-
-        if (hrsElem) hrsElem.innerText = String(hrs).padStart(2, '0');
-        if (minsElem) minsElem.innerText = String(mins).padStart(2, '0');
-        if (secsElem) secsElem.innerText = String(secs).padStart(2, '0');
-    }
-
-    // புதிய டைமரை உருவாக்குதல்
-    function resetAndSetNewTimer() {
-        const now = Math.floor(Date.now() / 1000);
-        const targetTime = now + DEFAULT_DURATION_SECONDS;
-        localStorage.setItem(STORAGE_KEY, targetTime);
-        return targetTime;
-    }
-
-    // முக்கிய டைமர் இயக்கும் ஃபங்ஷன்
-    function startRealtimeTimer() {
-        if (timerInterval) clearInterval(timerInterval);
-
-        const now = Math.floor(Date.now() / 1000);
-        let storedTarget = localStorage.getItem(STORAGE_KEY);
-
-        // பேஜ் ரீஃப்ரெஷ் ஆகும்போது புதிய அனிமேஷன் தேவைப்பட்டால் அல்லது டைமர் இல்லாவிட்டால்
-        const navEntries = performance.getEntriesByType('navigation');
-        const isPageRefreshed = navEntries.length > 0 && navEntries[0].type === 'reload';
-
-        // Pay UI பக்கத்தில் இருந்து ரீஃப்ரெஷ் செய்தால் புதிய நேரத்திற்கு ரீசெட் செய்யும்
-        if (isPageRefreshed && window.location.pathname.includes('pay')) {
-            storedTarget = resetAndSetNewTimer();
-        } else if (!storedTarget) {
-            storedTarget = resetAndSetNewTimer();
-        } else {
-            storedTarget = parseInt(storedTarget, 10);
+        let amountToSend = BASE_AMOUNT;
+        if (isRetryWithPaisa) {
+            const offset = (Math.floor(Math.random() * 90) + 1) / 100;
+            amountToSend = parseFloat((BASE_AMOUNT + offset).toFixed(2));
         }
 
-        let remaining = storedTarget - now;
+        try {
+            const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount: amountToSend })
+            });
 
-        // நேரம் முடிந்துவிட்டால் (0 விநாடிகள் அல்லது எக்ஸ்பைரி)
-        if (remaining <= 0) {
-            renderTimer(0);
-            localStorage.removeItem(STORAGE_KEY);
-            handleOfferExpiry();
-            return;
-        }
+            const data = await res.json();
 
-        // 1. தாமதம் இன்றி முதல் விநாடியிலேயே ஸ்கிரீனில் நேரத்தைக் காட்டுதல்
-        renderTimer(remaining);
-
-        // 2. தொடர்ச்சியான பின்னணி ரன்
-        timerInterval = setInterval(() => {
-            const currentSeconds = Math.floor(Date.now() / 1000);
-            const currentRemaining = storedTarget - currentSeconds;
-
-            if (currentRemaining <= 0) {
-                clearInterval(timerInterval);
-                renderTimer(0);
-                localStorage.removeItem(STORAGE_KEY);
-                handleOfferExpiry();
-            } else {
-                renderTimer(currentRemaining);
+            // High Volume Error வந்தால் தானாக சில பைசாக்கள் கூட்டி மீண்டும் முயற்சிக்கும்
+            if (!res.ok || (data.detail && data.detail.includes('High volume'))) {
+                if (!isRetryWithPaisa) return window.initiateSmartCheckout(true);
+                throw new Error("Gateway busy");
             }
-        }, 1000);
-    }
 
-    // நேரம் முடிந்ததும் செய்ய வேண்டிய நடவடிக்கை
-    function handleOfferExpiry() {
-        console.warn("Session expired. Offer time ended.");
-        // தேவைப்பட்டால் எக்ஸ்பைரி பேஜுக்கு மாற்ற அல்லது புதுப்பிக்க:
-        // window.location.href = "offline.html"; 
-    }
+            if (btnText) btnText.innerText = oldText;
 
-    // பயனர் Pay UI-லிருந்து Back வரும்போது உடனடியாக ஒத்திசைவு செய்ய
-    window.addEventListener('pageshow', () => {
-        startRealtimeTimer();
-    });
+            // QR Code கிடைத்தவுடன் திரையில் காட்டி பேமெண்ட் சோதனையைத் தொடங்குதல்
+            if (data.success && data.qrImage) {
+                currentOrderId = data.orderId;
+                displayDynamicQRCode(data.qrImage, amountToSend, data.orderId);
+                startPaymentStatusCheck(data.orderId);
+            } else {
+                alert("QR Code உருவாக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்!");
+            }
 
-    // விசிபிலிட்டி மாறும்போது (Tab Switch / Return)
-    document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            startRealtimeTimer();
+        } catch (err) {
+            console.error("Payment Error:", err);
+            if (btnText) btnText.innerText = oldText;
+            alert("Payment Gateway Error. Please try again in a few moments.");
         }
-    });
+    };
 
-    // DOM தயாரான உடனேயே இயக்குதல்
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startRealtimeTimer);
-    } else {
-        startRealtimeTimer();
+    // 2. Dynamic QR Code-ஐ பாப்-அப் ஆகக் காட்டும் UI
+    function displayDynamicQRCode(qrSrc, amt, orderId) {
+        const existing = document.getElementById('dynamic-qr-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'dynamic-qr-modal';
+        modal.style.cssText = `
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+            display: flex; align-items: flex-end; justify-content: center;
+            z-index: 999999; backdrop-filter: blur(5px);
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background: #111; width: 100%; max-width: 440px;
+                border-top: 2px solid #00e676; border-radius: 24px 24px 0 0;
+                padding: 24px 20px; text-align: center; color: #fff;
+                box-shadow: 0 -10px 30px rgba(0,230,118,0.2);
+            ">
+                <div style="font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Scan & Pay via UPI</div>
+                <div style="font-size: 32px; font-weight: 800; color: #00e676; margin: 6px 0 16px 0;">₹${amt}</div>
+                
+                <div style="background: #fff; display: inline-block; padding: 12px; border-radius: 16px; margin-bottom: 12px;">
+                    <img src="${qrSrc}" alt="UPI QR Code" style="width: 200px; height: 200px; display: block; border-radius: 8px;">
+                </div>
+
+                <div style="font-size: 11px; color: #666; margin-bottom: 16px;">Order ID: ${orderId} • Checking payment automatically...</div>
+                
+                <button onclick="closeQRModal()" style="
+                    width: 100%; padding: 14px; background: #222; color: #fff;
+                    border: 1px solid #333; border-radius: 12px; font-size: 15px;
+                    font-weight: bold; cursor: pointer;
+                ">Close / Cancel</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
     }
+
+    // 3. யூசர் பணம் செலுத்திவிட்டாரா எனத் தானாகச் சோதிக்கும் லாஜிக் (Webhook / Status Check)
+    function startPaymentStatusCheck(orderId) {
+        if (pollInterval) clearInterval(pollInterval);
+
+        pollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(SUPABASE_CHECK_STATUS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ orderId: orderId })
+                });
+                const resData = await res.json();
+
+                if (resData.status === "paid" && resData.telegramLink) {
+                    clearInterval(pollInterval);
+                    window.location.href = resData.telegramLink; // பேமெண்ட் முடிந்ததும் தானாக டெலிகிராம் லிங்க்கிற்குச் செல்லும்
+                }
+            } catch (e) {
+                console.log("Polling error:", e);
+            }
+        }, 3000); // 3 விநாடிகளுக்கு ஒருமுறை செக் செய்யும்
+    }
+
+    window.closeQRModal = function() {
+        const modal = document.getElementById('dynamic-qr-modal');
+        if (modal) modal.remove();
+        if (pollInterval) clearInterval(pollInterval);
+    };
 })();
 </script>
 </body>
