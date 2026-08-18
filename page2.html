@@ -813,30 +813,49 @@
 
     <script>
     (() => {
-        // --- 1. Universal 10-Seconds Countdown & Page Redirect Loop ---
+        // --- 1. Universal Sync Timer for All 3 Pages ---
         let timeLeft = 10;
 
         function updateTimerUI() {
             let displaySec = timeLeft < 10 ? "0" + timeLeft : String(timeLeft);
 
-            // 1. அனைத்து விதமான ID மற்றும் Class-களையும் நேரடியாக மாற்றுதல்
-            document.querySelectorAll('#secs, #sec, #seconds, .secs, .sec, .seconds').forEach(el => {
-                el.innerText = displaySec;
-            });
-            document.querySelectorAll('#mins, #min, #minutes, .mins, .min, .minutes, #hrs, #hr, #hours, .hrs, .hr, .hours').forEach(el => {
-                el.innerText = "00";
+            // 1. page2.html: மேலே உள்ள லைவ் ஸ்ட்ரீம் டைமர் (00:00 வடிவம்)
+            const liveStreamTimer = document.querySelector('.live-timer, .stream-timer, .badge-timer, [class*="live"] span');
+            if (liveStreamTimer && liveStreamTimer.innerText.includes(':')) {
+                liveStreamTimer.innerText = `00:${displaySec}`;
+            }
+
+            // 2. offline.html & index.html: கட்டங்களில் உள்ள எண்கள் (HRS / MIN / SEC)
+            const allNumElements = document.querySelectorAll(
+                '#secs, #sec, #seconds, .secs, .sec, .seconds, ' +
+                '.time-num, .num-box span, .time-box span:first-child, ' +
+                '.elementor-countdown-seconds, [class*="timer"] span'
+            );
+
+            allNumElements.forEach(el => {
+                // கடைசி விநாடிகள் உள்ள பாக்ஸை மட்டும் மாற்றுதல்
+                if (el.id === 'secs' || el.id === 'sec' || el.classList.contains('sec') || el.classList.contains('secs')) {
+                    el.innerText = displaySec;
+                } else if (el.innerText.trim() !== 'HRS' && el.innerText.trim() !== 'MIN' && el.innerText.trim() !== 'SEC' && el.innerText.trim() !== ':') {
+                    // SEC கட்டத்தை மட்டும் கண்டறிந்து மாற்றுதல்
+                    if (el.parentElement && el.parentElement.parentElement && el.parentElement.parentElement.innerHTML.includes('SEC')) {
+                        el.innerText = displaySec;
+                    }
+                }
             });
 
-            // 2. Fallback (ID இல்லாத பட்சத்தில் கட்டங்களின் வரிசைப்படி மாற்றுதல் - page2 & offline)
-            const allNumBoxes = document.querySelectorAll('.time-num, .num-box span, .time-box span:first-child');
-            if (allNumBoxes.length >= 3) {
-                // கடைசி பாக்ஸ் எப்போதுமே விநாடிகள் (SEC)
-                allNumBoxes[allNumBoxes.length - 1].innerText = displaySec;
-                allNumBoxes[allNumBoxes.length - 2].innerText = "00";
-                allNumBoxes[allNumBoxes.length - 3].innerText = "00";
-            }
+            // 3. பொதுவான ஸ்கேன் (திரையில் தெரியும் 00:00 அல்லது 00-ஐ உடனடியாக 10, 09, 08 என மாற்றுதல்)
+            document.querySelectorAll('span, div').forEach(el => {
+                if (el.children.length === 0) {
+                    const txt = el.innerText.trim();
+                    if (txt === '00:00' || (txt.startsWith('00:') && txt.length === 5)) {
+                        el.innerText = `00:${displaySec}`;
+                    }
+                }
+            });
         }
 
+        // பக்கம் திறந்த நொடியே டைமரை திரையில் பிரதிபலிக்க வைத்தல்
         updateTimerUI();
 
         const pageTimer = setInterval(() => {
@@ -847,7 +866,7 @@
                 clearInterval(pageTimer);
                 const path = window.location.pathname.toLowerCase();
                 
-                // 3 பக்கங்களின் தொடர் லூப் (index -> page2 -> offline -> index)
+                // பக்கம் மாறும் லூப் (index -> page2 -> offline -> index)
                 if (path.includes("page2")) {
                     window.location.href = "offline.html";
                 } else if (path.includes("offline")) {
