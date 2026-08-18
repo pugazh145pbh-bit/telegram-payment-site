@@ -12,8 +12,7 @@ exports.handler = async (event) => {
 
   try {
     const { amount } = JSON.parse(event.body || "{}");
-    // Amount set to 5 for testing
-    const orderAmount = Number(amount) || 1;
+    const orderAmount = Number(amount) || 5;
 
     const userNumericId = Date.now().toString().slice(-6) + Math.floor(1000 + Math.random() * 9000);
     const clientTxnId = "TXN_" + userNumericId;
@@ -28,13 +27,20 @@ exports.handler = async (event) => {
         amount: orderAmount,
         client_txn_id: clientTxnId,
         p_info: "Private Telegram Access",
-        customer_name: "Customer"
+        customer_name: "Customer",
+        customer_email: "test@example.com", // சில கேட்வேக்கள் ஈமெயில்/மொபைல் நம்பரை கட்டாயம் கேட்கலாம்
+        customer_mobile: "9876543210"
       })
     });
 
     const data = await response.json();
 
+    // கேட்வே எரர் அடித்தால் என்ன காரணம் என்று Netlify-ல் பிரிண்ட் செய்வதற்கான கமெண்ட்
     if (!data.status || !data.data) {
+      console.error("========== VYAPAR GATEWAY ERROR ==========");
+      console.error("Error Response:", JSON.stringify(data, null, 2));
+      console.error("==========================================");
+
       return {
         statusCode: 400,
         headers: { "Content-Type": "application/json" },
@@ -65,6 +71,7 @@ exports.handler = async (event) => {
       })
     };
   } catch (error) {
+    console.error("Server Error in create-order:", error);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
