@@ -1065,88 +1065,145 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-    // --- 1. CONFIGURATION ---
-    const UPI_ID = "your-upi-id@okaxis"; // உங்கள் UPI ID-ஐ இங்கே மாற்றவும்
-    const RECEIVER_NAME = "Indhuja";
-    const AMOUNT = "199.00";
+    // --- CONFIGURATION ---
+    const AMOUNT_VAL = "199.00";
+    let countdownTimer = null;
+    let paymentPollInterval = null;
 
+    // --- DOM ELEMENTS ---
     const payOverlay = document.getElementById("payment-page");
-    const qrImage = document.getElementById("qrImage");
-    const orderIdDisplay = document.getElementById("orderIdDisplay");
-    const amountDisplay = document.getElementById("amountDisplay");
-    const payTimerElem = document.getElementById("pay-timer");
+    const joinModal = document.getElementById("join-modal-overlay");
+    const qrImgElem = document.getElementById("qrImage");
+    const orderIdElem = document.getElementById("orderIdDisplay");
+    const amountElem = document.getElementById("amountDisplay");
+    const timerElem = document.getElementById("pay-timer");
+    const telegramBtn = document.getElementById("telegramJoinBtn");
+    const closePayBtn = document.getElementById("close-pay-btn");
+    const closeModalBtn = document.getElementById("close-modal-btn");
+    const openJoinBtn = document.getElementById("open-join-modal");
 
-    let payCountdownInterval = null;
-
-    // --- 2. DYNAMIC QR & ORDER ID GENERATOR ---
-    function setupDynamicPayment() {
-        // Generate Unique Dynamic Order ID
-        const orderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
-        if (orderIdDisplay) orderIdDisplay.innerText = orderId;
-        if (amountDisplay) amountDisplay.innerText = `₹ ${AMOUNT}`;
-
-        // UPI Intent URL format with dynamic Order ID & Amount
-        const upiUrl = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(RECEIVER_NAME)}&am=${AMOUNT}&cu=INR&tn=${encodeURIComponent(orderId)}`;
-        
-        // Generate Live Dynamic QR Code via QR Server API
-        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`;
-        if (qrImage) {
-            qrImage.src = qrApiUrl;
-        }
-
-        // Start 5-minute countdown
-        startPayTimer(5 * 60);
-    }
-
-    // --- 3. TIME UP / COUNTDOWN LOGIC ---
-    function startPayTimer(durationInSeconds) {
-        if (payCountdownInterval) clearInterval(payCountdownInterval);
-
-        let remaining = durationInSeconds;
-
-        payCountdownInterval = setInterval(() => {
-            const minutes = Math.floor(remaining / 60);
-            const seconds = remaining % 60;
-
-            if (payTimerElem) {
-                payTimerElem.innerText = `${minutes}:${String(seconds).padStart(2, '0')}`;
-            }
-
-            if (remaining <= 0) {
-                clearInterval(payCountdownInterval);
-                if (payTimerElem) {
-                    payTimerElem.innerText = "TIME EXPIRED";
-                    payTimerElem.style.color = "#ff0000";
-                }
-                alert("Payment session expired. Please reopen and try again.");
-                if (payOverlay) payOverlay.style.display = "none";
-            }
-
-            remaining--;
-        }, 1000);
-    }
-
-    // --- 4. OPEN / CLOSE EVENTS ---
-    const openButtons = [
+    const triggerButtons = [
         document.getElementById("open-payment-page"),
         document.getElementById("ctaSection"),
         document.getElementById("open-pay-slide-3")
     ];
 
-    openButtons.forEach(btn => {
-        if (btn) {
-            btn.addEventListener("click", () => {
-                if (payOverlay) payOverlay.style.display = "flex";
-                setupDynamicPayment();
-            });
+    // --- 1. START 5-MINUTE COUNTDOWN ---
+    function startCountdown(durationSeconds) {
+        if (countdownTimer) clearInterval(countdownTimer);
+        let remaining = durationSeconds;
+
+        countdownTimer = setInterval(() => {
+            const mins = Math.floor(remaining / 60);
+            const secs = remaining % 60;
+
+            if (timerElem) {
+                timerElem.innerText = `${mins}:${String(secs).padStart(2, '0')}`;
+            }
+
+            if (remaining <= 0) {
+                clearInterval(countdownTimer);
+                if (paymentPollInterval) clearInterval(paymentPollInterval);
+                if (timerElem) {
+                    timerElem.innerText = "TIME EXPIRED";
+                    timerElem.style.color = "#d32f2f";
+                }
+            }
+            remaining--;
+        }, 1000);
+    }
+
+    // --- 2. GENERATE DYNAMIC PAYMENT & BACKEND INTEGRATION ---
+    async function initPayment() {
+        if (!payOverlay) return;
+        payOverlay.style.display = "flex";
+
+        // Reset UI Elements
+        if (telegramBtn) telegramBtn.style.display = "none";
+        if (amountElem) amountElem.innerText = `₹ ${AMOUNT_VAL}`;
+
+        // Generate Unique Order ID
+        const dynamicOrderId = "ORD-" + Math.floor(100000 + Math.random() * 900000);
+        if (orderIdElem) orderIdElem.innerText = dynamicOrderId;
+
+        // Dynamic UPI QR Fallback Generator (Instant Load)
+        const upiString = `upi://pay?pa=your-upi-id@okaxis&pn=Indhuja&am=${AMOUNT_VAL}&cu=INR&tn=${dynamicOrderId}`;
+        if (qrImgElem) {
+            qrImgElem.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiString)}`;
         }
+
+        // Start Countdown Timer
+        startCountdown(5 * 60);
+
+        // Try Backend Vyapar API Integration
+        try {
+            const res = await fetch("/api/create-vyapar-order", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ orderId: dynamicOrderId, amount: AMOUNT_VAL })
+            });
+            const data = await res.json();
+            if (data && data.qrCodeUrl && qrImgElem) {
+                qrImgElem.src = data.qrCodeUrl;
+            }
+        } catch (e) {
+            console.warn("Using Direct UPI QR fallback:", e);
+        }
+
+        // Start Checking Payment Status (Polling every 3 seconds)
+        pollPaymentStatus(dynamicOrderId);
+    }
+
+    // --- 3. CHECK PAYMENT STATUS ---
+    function pollPaymentStatus(orderId) {
+        if (paymentPollInterval) clearInterval(paymentPollInterval);
+
+        paymentPollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/check-status?orderId=${orderId}`);
+                const data = await res.json();
+
+                if (data && (data.status === "PAID" || data.status === "SUCCESS")) {
+                    clearInterval(paymentPollInterval);
+                    clearInterval(countdownTimer);
+
+                    if (telegramBtn) {
+                        telegramBtn.style.display = "block";
+                        telegramBtn.href = data.telegramLink || "#";
+                    }
+                    if (timerElem) {
+                        timerElem.innerText = "PAYMENT CONFIRMED ✅";
+                        timerElem.style.color = "#10b981";
+                    }
+                }
+            } catch (err) {
+                // Polling fails silently until success
+            }
+        }, 3000);
+    }
+
+    // --- 4. BUTTON CLICK LISTENERS ---
+    triggerButtons.forEach(btn => {
+        if (btn) btn.addEventListener("click", initPayment);
     });
 
-    const closePayBtn = document.getElementById("close-pay-btn");
     if (closePayBtn) {
         closePayBtn.addEventListener("click", () => {
             if (payOverlay) payOverlay.style.display = "none";
-            if (payCountdownInterval) clearInterval(payCountdownInterval);
+            if (countdownTimer) clearInterval(countdownTimer);
+            if (paymentPollInterval) clearInterval(paymentPollInterval);
+        });
+    }
+
+    if (openJoinBtn && joinModal) {
+        openJoinBtn.addEventListener("click", () => {
+            joinModal.style.display = "flex";
+        });
+    }
+
+    if (closeModalBtn && joinModal) {
+        closeModalBtn.addEventListener("click", () => {
+            joinModal.style.display = "none";
         });
     }
 });
