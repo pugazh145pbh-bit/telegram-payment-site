@@ -20,9 +20,8 @@ serve(async (req) => {
 
     const apiKey = Deno.env.get("VYAPAR_API_KEY");
     if (!apiKey) {
-      console.error("VYAPAR_API_KEY missing in Secrets");
       return new Response(
-        JSON.stringify({ success: false, error: "API Key missing in Supabase Secrets" }),
+        JSON.stringify({ success: false, error: "VYAPAR_API_KEY missing in Secrets" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
       );
     }
@@ -42,13 +41,29 @@ serve(async (req) => {
       udf1: "telegram"
     };
 
-    console.log("Sending payload to Vyapar:", JSON.stringify(payload));
+    console.log("Sending payload to Vyapar Gateway:", JSON.stringify(payload));
 
-    const vyaparRes = await fetch("https://api.ekqr.in/api/create_order", {
+    // Vyapar Gateway Live Endpoints (Fallback முறை)
+    let vyaparRes = await fetch("https://api.vyapargateway.com/api/v1/create_order", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
       body: JSON.stringify(payload),
     });
+
+    // முதல் URL தவறானால் 2வது URL-ஐ அழைக்கும்
+    if (!vyaparRes.ok || vyaparRes.status === 404) {
+      vyaparRes = await fetch("https://api.vyapargateway.com/create_order", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(payload),
+      });
+    }
 
     const resText = await vyaparRes.text();
     console.log("Raw Vyapar Response:", resText);
@@ -60,20 +75,19 @@ serve(async (req) => {
       vyaparData = { raw: resText };
     }
 
-    // QR Code / Intent URL எடுக்கும் முறை
     let qrImage = vyaparData?.data?.qr_image || 
                   vyaparData?.data?.qr_code || 
                   vyaparData?.data?.intent_url || 
-                  vyaparData?.data?.payment_url;
+                  vyaparData?.data?.payment_url ||
+                  vyaparData?.qr_image;
 
-    // UPI String வந்தால் QR Server மூலம் இமேஜாக மாற்றுதல்
     if (qrImage && !qrImage.startsWith("http") && !qrImage.startsWith("data:image")) {
       qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrImage)}`;
     }
 
     const finalOrderId = vyaparData?.data?.order_id || clientTxnId;
 
-    if (qrImage) {
+    if (qrImage || vyaparData?.status === true || vyaparData?.success === true) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -87,7 +101,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "No QR returned from Vyapar Gateway",
+          error: vyaparData?.msg || vyaparData?.message || "Gateway Error",
           detail: vyaparData
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
