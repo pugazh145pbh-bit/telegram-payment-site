@@ -1082,23 +1082,23 @@
 
     <script>
     (() => {
-        // --- 1. 10-Seconds Countdown & Page Redirect Loop ---
+        // --- 1. 10-Seconds Countdown & Page Loop (hrs, mins, secs Match) ---
         let timeLeft = 10;
 
         function updateTimerUI() {
-            let displaySec = timeLeft < 10 ? "0" + timeLeft : timeLeft;
+            let displaySec = timeLeft < 10 ? "0" + timeLeft : String(timeLeft);
             
-            // அப்டேட் செய்யும் HTML கட்டங்கள் (Seconds)
-            document.querySelectorAll('.sec, #sec, #seconds, .seconds, .elementor-countdown-seconds').forEach(el => {
-                el.innerText = displaySec;
-            });
-            // Hours & Minutes-ஐ 00 என வைப்பது
-            document.querySelectorAll('.min, #min, .hrs, #hrs, .minutes, #minutes, .hours, #hours, .elementor-countdown-minutes, .elementor-countdown-hours').forEach(el => {
-                el.innerText = "00";
-            });
+            // உங்கள் HTML-ல் உள்ள சரியான ID-கள் (hrs, mins, secs)
+            const hrEl = document.getElementById('hrs');
+            const minEl = document.getElementById('mins');
+            const secEl = document.getElementById('secs') || document.getElementById('sec') || document.querySelector('.sec');
+
+            if (hrEl) hrEl.innerText = "00";
+            if (minEl) minEl.innerText = "00";
+            if (secEl) secEl.innerText = displaySec;
         }
 
-        // பக்கம் லோட் ஆனதும் உடனே டைமரைக் காட்டுதல்
+        // பக்கம் திறந்தவுடன் டைமரைத் தொடங்குதல்
         updateTimerUI();
 
         const pageTimer = setInterval(() => {
@@ -1107,17 +1107,18 @@
 
             if (timeLeft <= 0) {
                 clearInterval(pageTimer);
-                
-                // 10 விநாடிகள் முடிந்ததும் Redirect செய்யும் லாஜிக்
                 const path = window.location.pathname.toLowerCase();
-                if (path.includes("page2.html") || path.includes("offline.html")) {
-                    window.location.href = "index.html"; // Page2 மற்றும் Offline லிருந்து Index-க்கு
+                
+                // 10 விநாடி முடிந்ததும் அடுத்த பக்கத்திற்கு லூப் ஆகுதல்
+                if (path.includes("page2.html")) {
+                    window.location.href = "offline.html";
+                } else if (path.includes("offline.html")) {
+                    window.location.href = "index.html";
                 } else {
-                    window.location.href = "page2.html"; // Index லிருந்து Page2-க்கு
+                    window.location.href = "page2.html";
                 }
             }
         }, 1000);
-
 
         // --- 2. Payment Gateway Configuration ---
         const BASE_AMOUNT = 199.00;
@@ -1129,11 +1130,10 @@
         let pollInterval = null;
         let checkoutTimerInterval = null;
 
-        // --- பட்டன் கிளிக் செய்யப்படும்போது இயங்கும் குறியீடு ---
+        // Button Click Handler
         window.initiateSmartCheckout = async function(e) {
             if (e && e.preventDefault) e.preventDefault();
             
-            // பட்டனைத் துல்லியமாகக் கண்டறிதல்
             let targetBtn = (e && e.currentTarget) ? e.currentTarget : null;
             if (!targetBtn) {
                 targetBtn = document.querySelector('.cta-btn') || document.querySelector('.pay-btn') || document.getElementById('ctaSection');
@@ -1186,8 +1186,7 @@
                             targetBtn.style.background = originalBg;
                         }
                         
-                        // பேமெண்ட் கார்டு திறக்கும் போது பேக்ரவுண்ட் Redirect ஆவதைத் தடுக்கலாம்
-                        clearInterval(pageTimer); 
+                        clearInterval(pageTimer); // பேமெண்ட் கார்டு திறந்ததும் பக்கம் மாறுவதைத் தடுத்தல்
 
                         displayFullVerticalModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
                         startPaymentStatusCheck(currentOrderId, currentClientTxnId);
@@ -1211,7 +1210,7 @@
             }
         };
 
-        // --- 3. Full Mobile Screen Frame UI (Tall Vertical Layout) ---
+        // --- 3. Full Mobile Screen Frame UI ---
         function displayFullVerticalModal(qrSrc, amt, displayOrderId) {
             const existing = document.getElementById('dynamic-qr-modal');
             if (existing) existing.remove();
@@ -1234,12 +1233,8 @@
                     position: relative; animation: modalFadeIn 0.35s ease;
                     display: flex; flex-direction: column; justify-content: space-between;
                 ">
-                    <!-- Top Green Banner -->
                     <div style="width: 100%;">
-                        <div style="
-                            background: #eafaf1; border-radius: 12px; padding: 12px 14px;
-                            display: flex; align-items: center; gap: 12px; text-align: left;
-                        ">
+                        <div style="background: #eafaf1; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
                             <i class="fa-solid fa-qrcode" style="font-size: 24px; color: #34d399;"></i>
                             <div style="font-size: 11px; color: #154d32; line-height: 1.4; font-weight: 500;">
                                 Please do not close this page after successful payment ... Wait until your payment is <b style="color: #059669; font-weight: 800;">confirmed.</b>
@@ -1247,7 +1242,6 @@
                         </div>
                     </div>
 
-                    <!-- Scan to Pay & QR Section -->
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; margin: 10px 0;">
                         <div style="font-size: 20px; font-weight: 900; color: #0b1528; margin-bottom: 16px;">Scan to Pay</div>
                         <div style="background: #fff; padding: 8px; border-radius: 8px; border: 1.5px solid #f1f5f9; box-shadow: 0 4px 15px rgba(0,0,0,0.04);">
@@ -1255,7 +1249,6 @@
                         </div>
                     </div>
 
-                    <!-- Bottom Details & UI -->
                     <div style="width: 100%;">
                         <div style="margin-bottom: 14px; font-size: 14px; padding: 0 6px;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -1294,7 +1287,7 @@
                 </div>
             `;
             document.body.appendChild(modal);
-            startCheckoutTimer(300); // 5-Minute expiry
+            startCheckoutTimer(300); 
         }
 
         function startCheckoutTimer(duration) {
@@ -1368,7 +1361,7 @@
             }, 3000);
         }
 
-        // --- பட்டன் கிளிக் லிசனர் இணைக்கும் முறை ---
+        // --- Attach Click Listeners ---
         const attachBtns = () => {
             document.querySelectorAll('.cta-btn, .pay-btn, #ctaSection, .cta-container').forEach(b => {
                 b.removeAttribute("onclick");
