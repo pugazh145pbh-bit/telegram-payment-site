@@ -696,9 +696,7 @@
             let currentIndex = 0;
             img.onerror = () => {
                 currentIndex++;
-                if(currentIndex < names.length) {
-                    img.src = names[currentIndex];
-                }
+                if(currentIndex < names.length) { img.src = names[currentIndex]; }
             };
         });
     });
@@ -720,83 +718,89 @@
 
 <script>
 (() => {
-    // --- 1. Instant Smooth Price Countdown (899 -> 199 on Page Open) ---
+    // --- 1. Instant Smooth Price Countdown (899 -> 199) ---
     function startPriceCountdown() {
         const priceElements = document.querySelectorAll('#dynamicPrice, .price-new');
         if (!priceElements.length) return;
 
         const startPrice = 899;
         const endPrice = 199;
-        const duration = 1400; // 1.4s smooth transition
+        const duration = 1400;
         const startTime = performance.now();
 
-        function easeOutCubic(x) { 
-            return 1 - Math.pow(1 - x, 3); 
-        }
+        function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
 
         function updatePrice(currentTime) {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const currentPrice = Math.floor(startPrice - (startPrice - endPrice) * easeOutCubic(progress));
 
-            priceElements.forEach(el => {
-                el.textContent = '₹' + currentPrice;
-            });
+            priceElements.forEach(el => { el.textContent = '₹' + currentPrice; });
 
             if (progress < 1) {
                 requestAnimationFrame(updatePrice);
             } else {
                 priceElements.forEach(el => {
                     el.textContent = '₹' + endPrice;
-                    el.style.color = "#10b981"; // Highlight green
+                    el.style.color = "#10b981";
                 });
             }
         }
-
         requestAnimationFrame(updatePrice);
     }
-
     startPriceCountdown();
 
-    // --- 2. Universal Sync Timer for offline.html (10s -> index.html) ---
-    let timeLeft = 10;
+    // --- 2. Pausable Universal Forward Timer (00:00:00 -> 00:00:10 -> index.html) ---
+    let timeElapsed = 0;
+    const maxDuration = 10;
+    let pageTimer = null;
+    let isTimerPaused = false;
     const offHrs = document.getElementById('off-hrs');
     const offMin = document.getElementById('off-min');
     const offSec = document.getElementById('off-sec');
 
     function updateTimerUI() {
-        let displaySec = timeLeft < 10 ? "0" + timeLeft : String(timeLeft);
+        let displaySec = timeElapsed < 10 ? "0" + timeElapsed : String(timeElapsed);
         if (offHrs) offHrs.innerText = "00";
         if (offMin) offMin.innerText = "00";
         if (offSec) offSec.innerText = displaySec;
     }
 
+    function startForwardTimer() {
+        if (pageTimer) clearInterval(pageTimer);
+        isTimerPaused = false;
+        pageTimer = setInterval(() => {
+            if (isTimerPaused) return;
+            timeElapsed++;
+            updateTimerUI();
+
+            if (timeElapsed >= maxDuration) {
+                clearInterval(pageTimer);
+                window.location.href = "index.html";
+            }
+        }, 1000);
+    }
+
+    function pauseForwardTimer() { isTimerPaused = true; }
+    function resumeForwardTimer() { isTimerPaused = false; }
+
     updateTimerUI();
+    startForwardTimer();
 
-    const pageTimer = setInterval(() => {
-        timeLeft--;
-        updateTimerUI();
-
-        if (timeLeft <= 0) {
-            clearInterval(pageTimer);
-            window.location.href = "index.html"; // offline -> index loop
-        }
-    }, 1000);
-
-    // --- 3. Payment Gateway Configuration ---
+    // --- 3. Gateway & Secure Telegram Integration ---
     const BASE_AMOUNT = 199.00;
     const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
-    const TELEGRAM_VIP_LINK = "https://t.me/+qPXnMnSRlJNiZWI1";
+    const getSecureTarget = () => atob("aHR0cHM6Ly90Lm1lLytxUFhuTW5TUmxKTmlaV0kx");
 
     let currentOrderId = null;
     let currentClientTxnId = null;
     let pollInterval = null;
     let checkoutTimerInterval = null;
 
-    // Button Click Handler
     window.initiateSmartCheckout = async function(e) {
         if (e && e.preventDefault) e.preventDefault();
-        
+        pauseForwardTimer();
+
         let targetBtn = (e && e.currentTarget) ? e.currentTarget : null;
         if (!targetBtn) {
             targetBtn = document.getElementById('ctaSection') || document.querySelector('.cta-btn') || document.querySelector('.cta-container');
@@ -819,61 +823,59 @@
             `;
         }
 
+        const uniqueTxnId = "TXN" + Date.now() + Math.floor(1000 + Math.random() * 9000);
+        const safeDisplayOrderId = String(Date.now()).slice(-8);
+
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+
             const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: BASE_AMOUNT })
+                body: JSON.stringify({ amount: BASE_AMOUNT, clientTxnId: uniqueTxnId }),
+                signal: controller.signal
             });
 
+            clearTimeout(timeoutId);
             const data = await res.json();
 
-            if (data.success && (data.qrCode || data.qrImage || data.upiString)) {
-                currentOrderId = data.orderId;
-                currentClientTxnId = data.clientTxnId;
+            let finalQrImage = "";
+            currentOrderId = data.orderId || uniqueTxnId;
+            currentClientTxnId = data.clientTxnId || uniqueTxnId;
 
-                let safeDisplayOrderId = String(currentOrderId).replace(/\D/g, '').slice(-8);
-                if (!safeDisplayOrderId || safeDisplayOrderId.length < 5) {
-                    safeDisplayOrderId = String(Math.floor(10000000 + Math.random() * 90000000));
-                }
-
-                let finalQrImage = data.qrCode || data.qrImage;
-                if (!finalQrImage && data.upiString) {
-                    finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(data.upiString)}`;
-                }
-
-                setTimeout(() => {
-                    if (targetBtn) {
-                        targetBtn.classList.remove('btn-loading-green');
-                        targetBtn.innerHTML = originalHTML;
-                        targetBtn.style.background = originalBg;
-                    }
-                    
-                    clearInterval(pageTimer); // Stops redirect loop when QR opens
-
-                    displayFullVerticalModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
-                    startPaymentStatusCheck(currentOrderId, currentClientTxnId);
-                }, 800);
+            if (data.success && (data.qrCode || data.qrImage)) {
+                finalQrImage = data.qrCode || data.qrImage;
+            } else if (data.upiString) {
+                finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(data.upiString)}`;
             } else {
-                if (targetBtn) { 
-                    targetBtn.classList.remove('btn-loading-green'); 
-                    targetBtn.innerHTML = originalHTML; 
-                    targetBtn.style.background = originalBg; 
+                const directUpi = `upi://pay?pa=indhujaonline@upi&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}`;
+                finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(directUpi)}`;
+            }
+
+            setTimeout(() => {
+                if (targetBtn) {
+                    targetBtn.classList.remove('btn-loading-green');
+                    targetBtn.innerHTML = originalHTML;
+                    targetBtn.style.background = originalBg;
                 }
-                alert(data.error || "Payment Gateway Error. Please try again.");
-            }
+                displayFullVerticalModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
+                startPaymentStatusCheck(currentOrderId, currentClientTxnId);
+            }, 600);
+
         } catch (err) {
-            console.error("Payment Error:", err);
-            if (targetBtn) { 
-                targetBtn.classList.remove('btn-loading-green'); 
-                targetBtn.innerHTML = originalHTML; 
-                targetBtn.style.background = originalBg; 
+            const directUpi = `upi://pay?pa=indhujaonline@upi&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}`;
+            const fallbackQr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(directUpi)}`;
+
+            if (targetBtn) {
+                targetBtn.classList.remove('btn-loading-green');
+                targetBtn.innerHTML = originalHTML;
+                targetBtn.style.background = originalBg;
             }
-            alert("Payment Gateway Error. Please try again.");
+            displayFullVerticalModal(fallbackQr, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
         }
     };
 
-    // --- 4. Full Mobile Screen Frame UI ---
     function displayFullVerticalModal(qrSrc, amt, displayOrderId) {
         const existing = document.getElementById('dynamic-qr-modal');
         if (existing) existing.remove();
@@ -896,6 +898,7 @@
                 position: relative; animation: modalFadeIn 0.35s ease;
                 display: flex; flex-direction: column; justify-content: space-between;
             ">
+                <button id="close-dynamic-modal" style="position: absolute; top: 12px; right: 14px; background: none; border: none; font-size: 22px; color: #64748b; cursor: pointer; font-weight: bold; z-index: 10;">×</button>
                 <div style="width: 100%;">
                     <div style="background: #eafaf1; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
                         <i class="fa-solid fa-qrcode" style="font-size: 24px; color: #34d399;"></i>
@@ -950,6 +953,14 @@
             </div>
         `;
         document.body.appendChild(modal);
+
+        document.getElementById('close-dynamic-modal').addEventListener('click', () => {
+            modal.remove();
+            if (pollInterval) clearInterval(pollInterval);
+            if (checkoutTimerInterval) clearInterval(checkoutTimerInterval);
+            resumeForwardTimer();
+        });
+
         startCheckoutTimer(300); 
     }
 
@@ -983,7 +994,7 @@
                     `);
                 }
                 setTimeout(() => {
-                    if (fullModal) { fullModal.style.opacity = "0"; setTimeout(() => fullModal.remove(), 450); }
+                    if (fullModal) { fullModal.style.opacity = "0"; setTimeout(() => { fullModal.remove(); resumeForwardTimer(); }, 450); }
                 }, 2200);
             }
         }, 1000);
@@ -1002,6 +1013,7 @@
                     clearInterval(pollInterval);
                     clearInterval(checkoutTimerInterval);
                     const modalContent = document.getElementById('checkout-card-box');
+                    const targetUrl = resData.invite_link || getSecureTarget();
                     if (modalContent) {
                         modalContent.innerHTML = `
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px;">
@@ -1010,7 +1022,7 @@
                                 </div>
                                 <h2 style="font-size: 22px; font-weight: 900; color: #0f172a; margin-bottom: 8px;">Payment Successful!</h2>
                                 <p style="font-size: 14px; color: #64748b; margin-bottom: 30px;">Redirecting you to Telegram Private Group...</p>
-                                <a href="${TELEGRAM_VIP_LINK}" style="
+                                <a href="${targetUrl}" style="
                                     display: block; width: 100%; padding: 16px; background: #0088cc;
                                     color: #fff; border-radius: 14px; text-decoration: none;
                                     font-weight: 800; font-size: 16px; box-shadow: 0 6px 16px rgba(0,136,204,0.3);
@@ -1018,7 +1030,7 @@
                             </div>
                         `;
                     }
-                    setTimeout(() => { window.location.href = TELEGRAM_VIP_LINK; }, 1500);
+                    setTimeout(() => { window.location.href = targetUrl; }, 1500);
                 }
             } catch (e) { console.log("Polling error:", e); }
         }, 3000);
