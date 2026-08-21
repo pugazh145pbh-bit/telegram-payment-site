@@ -1020,25 +1020,29 @@
 
     function scheduleIndianTimeSpike() {
         const now = new Date();
+        // Indian Standard Time (IST) கணக்கீடு
         const istHours = (now.getUTCHours() + 5 + Math.floor((now.getUTCMinutes() + 30) / 60)) % 24;
 
         let delay = 3000;
         let increment = 1;
 
         if (istHours >= 21 || istHours === 0) {
-            delay = Math.floor(Math.random() * 2000) + 2000;
+            // 🌙 9:00 PM to 12:00 AM Midnight (Over Spike): 2s - 4s gap, +1 to +3 (rarely up to 5)
+            delay = Math.floor(Math.random() * 2000) + 2000; // 2000ms to 4000ms
             const roll = Math.random();
             if (roll < 0.60) {
-                increment = Math.floor(Math.random() * 2) + 1;
+                increment = Math.floor(Math.random() * 2) + 1; // +1 or +2
             } else if (roll < 0.90) {
-                increment = 3;
+                increment = 3; // +3
             } else {
-                increment = Math.floor(Math.random() * 2) + 4;
+                increment = Math.floor(Math.random() * 2) + 4; // +4 or +5
             }
         } else if (istHours >= 18 && istHours < 21) {
+            // 🌆 6:00 PM to 9:00 PM (Evening Rise): 4s - 8s gap, +1 to +2
             delay = Math.floor(Math.random() * 4000) + 4000;
             increment = Math.floor(Math.random() * 2) + 1;
         } else {
+            // ☀️ 1:00 AM to 6:00 PM (Low Normal Activity): 15s - 45s gap, +1 or rarely +2
             delay = Math.floor(Math.random() * 30000) + 15000;
             increment = Math.random() < 0.85 ? 1 : 2;
         }
@@ -1050,12 +1054,13 @@
 
         setTimeout(scheduleIndianTimeSpike, delay);
     }
+    // Start live counter
     scheduleIndianTimeSpike();
 </script>
 
 <script>
 (() => {
-    // --- 1. Instant Smooth Price Countdown (899 -> 199) ---
+    // --- 1. Instant Smooth Price Countdown (1.4 Seconds) ---
     function startPriceCountdown() {
         const priceElements = document.querySelectorAll('#dynamicPrice, .price-new');
         if (!priceElements.length) return;
@@ -1065,14 +1070,18 @@
         const duration = 1400;
         const startTime = performance.now();
 
-        function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+        function easeOutCubic(x) { 
+            return 1 - Math.pow(1 - x, 3); 
+        }
 
         function updatePrice(currentTime) {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const currentPrice = Math.floor(startPrice - (startPrice - endPrice) * easeOutCubic(progress));
 
-            priceElements.forEach(el => { el.textContent = '₹' + currentPrice; });
+            priceElements.forEach(el => {
+                el.textContent = '₹' + currentPrice;
+            });
 
             if (progress < 1) {
                 requestAnimationFrame(updatePrice);
@@ -1083,14 +1092,14 @@
                 });
             }
         }
+
         requestAnimationFrame(updatePrice);
     }
+
     startPriceCountdown();
 
-    // --- 2. Pausable Universal Sync Timer (10s Countdown Loop) ---
+    // --- 2. Universal Sync Timer (10s Countdown Loop) ---
     let timeLeft = 10;
-    let pageTimer = null;
-    let isTimerPaused = false;
     const elHrs = document.getElementById('hrs');
     const elMins = document.getElementById('mins');
     const elSecs = document.getElementById('secs');
@@ -1102,31 +1111,22 @@
         if (elSecs) elSecs.innerText = displaySec;
     }
 
-    function startLoopTimer() {
-        if (pageTimer) clearInterval(pageTimer);
-        isTimerPaused = false;
-        pageTimer = setInterval(() => {
-            if (isTimerPaused) return;
-            timeLeft--;
-            updateTimerUI();
-
-            if (timeLeft <= 0) {
-                clearInterval(pageTimer);
-                window.location.href = "page2.html";
-            }
-        }, 1000);
-    }
-
-    function pauseLoopTimer() { isTimerPaused = true; }
-    function resumeLoopTimer() { isTimerPaused = false; }
-
     updateTimerUI();
-    startLoopTimer();
 
-    // --- 3. Gateway & Secure Telegram Integration ---
+    const pageTimer = setInterval(() => {
+        timeLeft--;
+        updateTimerUI();
+
+        if (timeLeft <= 0) {
+            clearInterval(pageTimer);
+            window.location.href = "page2.html";
+        }
+    }, 1000);
+
+    // --- 3. Payment Gateway Configuration & Checkout ---
     const BASE_AMOUNT = 199.00;
     const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
-    const getSecureTarget = () => atob("aHR0cHM6Ly90Lm1lLytxUFhuTW5TUmxKTmlaV0kx");
+    const TELEGRAM_VIP_LINK = "https://t.me/+qPXnMnSRlJNiZWI1";
 
     let currentOrderId = null;
     let currentClientTxnId = null;
@@ -1135,8 +1135,7 @@
 
     window.initiateSmartCheckout = async function(e) {
         if (e && e.preventDefault) e.preventDefault();
-        pauseLoopTimer();
-
+        
         let targetBtn = (e && e.currentTarget) ? e.currentTarget : null;
         if (!targetBtn) {
             targetBtn = document.getElementById('ctaSection') || document.querySelector('.cta-container');
@@ -1159,56 +1158,57 @@
             `;
         }
 
-        const uniqueTxnId = "TXN" + Date.now() + Math.floor(1000 + Math.random() * 9000);
-        const safeDisplayOrderId = String(Date.now()).slice(-8);
-
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
-
             const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: BASE_AMOUNT, clientTxnId: uniqueTxnId }),
-                signal: controller.signal
+                body: JSON.stringify({ amount: BASE_AMOUNT })
             });
 
-            clearTimeout(timeoutId);
             const data = await res.json();
 
-            let finalQrImage = "";
-            currentOrderId = data.orderId || uniqueTxnId;
-            currentClientTxnId = data.clientTxnId || uniqueTxnId;
+            if (data.success && (data.qrCode || data.qrImage || data.upiString)) {
+                currentOrderId = data.orderId;
+                currentClientTxnId = data.clientTxnId;
 
-            if (data.success && (data.qrCode || data.qrImage)) {
-                finalQrImage = data.qrCode || data.qrImage;
-            } else if (data.upiString) {
-                finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(data.upiString)}`;
-            } else {
-                const directUpi = `upi://pay?pa=indhujaonline@upi&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}`;
-                finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(directUpi)}`;
-            }
-
-            setTimeout(() => {
-                if (targetBtn) {
-                    targetBtn.classList.remove('btn-loading-green');
-                    targetBtn.innerHTML = originalHTML;
-                    targetBtn.style.background = originalBg;
+                let safeDisplayOrderId = String(currentOrderId).replace(/\D/g, '').slice(-8);
+                if (!safeDisplayOrderId || safeDisplayOrderId.length < 5) {
+                    safeDisplayOrderId = String(Math.floor(10000000 + Math.random() * 90000000));
                 }
-                displayFullVerticalModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
-                startPaymentStatusCheck(currentOrderId, currentClientTxnId);
-            }, 600);
 
-        } catch (err) {
-            const directUpi = `upi://pay?pa=indhujaonline@upi&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}`;
-            const fallbackQr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(directUpi)}`;
+                let finalQrImage = data.qrCode || data.qrImage;
+                if (!finalQrImage && data.upiString) {
+                    finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(data.upiString)}`;
+                }
 
-            if (targetBtn) {
-                targetBtn.classList.remove('btn-loading-green');
-                targetBtn.innerHTML = originalHTML;
-                targetBtn.style.background = originalBg;
+                setTimeout(() => {
+                    if (targetBtn) {
+                        targetBtn.classList.remove('btn-loading-green');
+                        targetBtn.innerHTML = originalHTML;
+                        targetBtn.style.background = originalBg;
+                    }
+                    
+                    clearInterval(pageTimer); // QR திறந்ததும் பக்கம் மாறுவதைத் தடுத்தல்
+
+                    displayFullVerticalModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
+                    startPaymentStatusCheck(currentOrderId, currentClientTxnId);
+                }, 800);
+            } else {
+                if (targetBtn) { 
+                    targetBtn.classList.remove('btn-loading-green'); 
+                    targetBtn.innerHTML = originalHTML; 
+                    targetBtn.style.background = originalBg; 
+                }
+                alert(data.error || "Payment Gateway Error. Please try again.");
             }
-            displayFullVerticalModal(fallbackQr, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
+        } catch (err) {
+            console.error("Payment Error:", err);
+            if (targetBtn) { 
+                targetBtn.classList.remove('btn-loading-green'); 
+                targetBtn.innerHTML = originalHTML; 
+                targetBtn.style.background = originalBg; 
+            }
+            alert("Payment Gateway Error. Please try again.");
         }
     };
 
@@ -1234,7 +1234,6 @@
                 position: relative; animation: modalFadeIn 0.35s ease;
                 display: flex; flex-direction: column; justify-content: space-between;
             ">
-                <button id="close-dynamic-modal" style="position: absolute; top: 12px; right: 14px; background: none; border: none; font-size: 22px; color: #64748b; cursor: pointer; font-weight: bold; z-index: 10;">×</button>
                 <div style="width: 100%;">
                     <div style="background: #eafaf1; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
                         <i class="fa-solid fa-qrcode" style="font-size: 24px; color: #34d399;"></i>
@@ -1289,14 +1288,6 @@
             </div>
         `;
         document.body.appendChild(modal);
-
-        document.getElementById('close-dynamic-modal').addEventListener('click', () => {
-            modal.remove();
-            if (pollInterval) clearInterval(pollInterval);
-            if (checkoutTimerInterval) clearInterval(checkoutTimerInterval);
-            resumeLoopTimer();
-        });
-
         startCheckoutTimer(300); 
     }
 
@@ -1330,7 +1321,7 @@
                     `);
                 }
                 setTimeout(() => {
-                    if (fullModal) { fullModal.style.opacity = "0"; setTimeout(() => { fullModal.remove(); resumeLoopTimer(); }, 450); }
+                    if (fullModal) { fullModal.style.opacity = "0"; setTimeout(() => fullModal.remove(), 450); }
                 }, 2200);
             }
         }, 1000);
@@ -1349,7 +1340,6 @@
                     clearInterval(pollInterval);
                     clearInterval(checkoutTimerInterval);
                     const modalContent = document.getElementById('checkout-card-box');
-                    const targetUrl = resData.invite_link || getSecureTarget();
                     if (modalContent) {
                         modalContent.innerHTML = `
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px;">
@@ -1358,7 +1348,7 @@
                                 </div>
                                 <h2 style="font-size: 22px; font-weight: 900; color: #0f172a; margin-bottom: 8px;">Payment Successful!</h2>
                                 <p style="font-size: 14px; color: #64748b; margin-bottom: 30px;">Redirecting you to Telegram Private Group...</p>
-                                <a href="${targetUrl}" style="
+                                <a href="${TELEGRAM_VIP_LINK}" style="
                                     display: block; width: 100%; padding: 16px; background: #0088cc;
                                     color: #fff; border-radius: 14px; text-decoration: none;
                                     font-weight: 800; font-size: 16px; box-shadow: 0 6px 16px rgba(0,136,204,0.3);
@@ -1366,7 +1356,7 @@
                             </div>
                         `;
                     }
-                    setTimeout(() => { window.location.href = targetUrl; }, 1500);
+                    setTimeout(() => { window.location.href = TELEGRAM_VIP_LINK; }, 1500);
                 }
             } catch (e) { console.log("Polling error:", e); }
         }, 3000);
