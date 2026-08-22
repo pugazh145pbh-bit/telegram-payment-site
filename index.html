@@ -1160,8 +1160,8 @@
             `;
         }
 
-        const uniqueTxnId = "TXN" + Date.now() + Math.floor(1000 + Math.random() * 9000);
-        const safeDisplayOrderId = String(Date.now()).slice(-8);
+        const uniqueTxnId = "TXN" + Date.now();
+        const safeDisplayOrderId = uniqueTxnId;
 
         // Standard 100% Valid Paytm Merchant NPCI Format
         const directValidUpi = `upi://pay?pa=paytmqr281005050101v4jfqfl7j94m@paytm&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}&tn=VIP%20Access`;

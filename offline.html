@@ -823,8 +823,8 @@
             `;
         }
 
-        const uniqueTxnId = "TXN" + Date.now() + Math.floor(1000 + Math.random() * 9000);
-        const safeDisplayOrderId = String(Date.now()).slice(-8);
+        const uniqueTxnId = "TXN" + Date.now();
+        const safeDisplayOrderId = uniqueTxnId;
 
         try {
             const controller = new AbortController();
