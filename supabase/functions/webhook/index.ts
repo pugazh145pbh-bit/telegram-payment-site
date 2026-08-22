@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 5. Telegram இன்வைட் லிங்க் உருவாக்குதல்
+    // Telegram One-Time Invite Link Generation
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const chatId = Deno.env.get("TELEGRAM_CHANNEL_ID");
     let inviteLink = "https://t.me/+qPXnMnSRlJNiZWI1";
@@ -131,7 +131,8 @@ Deno.serve(async (req) => {
             body: JSON.stringify({
               chat_id: chatId,
               member_limit: 1,
-              expire_date: Math.floor(Date.now() / 1000) + 86400,
+              expire_date: Math.floor(Date.now() / 1000) + 1800,
+              name: `VIP_${orderId}`,
             }),
           }
         );
@@ -139,8 +140,8 @@ Deno.serve(async (req) => {
         if (tgData.result?.invite_link) {
           inviteLink = tgData.result.invite_link;
         }
-      } catch (err) {
-        console.error("Telegram API Error:", err);
+      } catch (err: any) {
+        console.error("Telegram API Error:", err.message);
       }
     }
 
