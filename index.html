@@ -1174,7 +1174,7 @@
             const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: BASE_AMOUNT, clientTxnId: uniqueTxnId }),
+                body: JSON.stringify({ amount: 1, clientTxnId: uniqueTxnId }),
                 signal: controller.signal
             });
 

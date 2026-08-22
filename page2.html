@@ -888,7 +888,7 @@
         if (!priceElements.length) return;
 
         const startPrice = 899;
-        const endPrice = 199;
+        const endPrice = 1;
         const duration = 1400;
         const startTime = performance.now();
 
@@ -948,7 +948,7 @@
     startForwardTimer();
 
     // --- 3. Gateway & Secure Telegram Integration ---
-    const BASE_AMOUNT = 199.00;
+    const BASE_AMOUNT = 1.00;
     const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
     const getSecureTarget = () => atob("aHR0cHM6Ly90Lm1lLytxUFhuTW5TUmxKTmlaV0kx");
 
@@ -993,7 +993,7 @@
             const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: BASE_AMOUNT, clientTxnId: uniqueTxnId }),
+                body: JSON.stringify({ amount: 1, clientTxnId: uniqueTxnId }),
                 signal: controller.signal
             });
 

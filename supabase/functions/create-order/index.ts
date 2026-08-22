@@ -180,7 +180,7 @@ serve(async (req) => {
     // Frontend-ல் இருந்து வரும் `clientTxnId`-ஐ மட்டும் தான் பயன்படுத்த வேண்டும். 
     // புதிதாக நாமாக ஒன்றை உருவாக்கக் கூடாது.
     const clientTxnId = reqBody.clientTxnId;
-    const numAmount = parseFloat(reqBody.amount || "199");
+    const numAmount = parseFloat(reqBody.amount || "1.00");
 
     if (!clientTxnId) {
        throw new Error("clientTxnId is missing from frontend request");
