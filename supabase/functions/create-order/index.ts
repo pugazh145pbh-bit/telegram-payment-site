@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,6 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // CORS கையாளுதல்
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -18,96 +20,75 @@ serve(async (req) => {
       reqBody = {};
     }
 
-    const apiKey = (Deno.env.get("VYAPAR_API_KEY") || "").trim();
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ success: false, error: "VYAPAR_API_KEY missing in Secrets" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-      );
-    }
+    // சுபாபேஸ் இணைப்பு அமைத்தல்
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Status Check
+    // --- 1. STATUS CHECK API (Frontend Polling-க்கு) ---
     if (reqBody.action === "check_status" && (reqBody.order_id || reqBody.client_txn_id)) {
-      const statusRes = await fetch("https://vyapargateway.com/api/v1/check_order_status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": apiKey
-        },
-        body: JSON.stringify({
-          key: apiKey,
-          order_id: reqBody.order_id,
-          client_txn_id: reqBody.client_txn_id
-        })
-      });
+      const searchId = reqBody.order_id || reqBody.client_txn_id;
 
-      const statusData = await statusRes.json();
-      return new Response(
-        JSON.stringify({
-          success: true,
-          status: statusData?.data?.status || "pending",
-          data: statusData?.data
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      const { data, error } = await supabase
+        .from('orders')
+        .select('status, telegram_link')
+        .eq('order_id', searchId)
+        .single();
 
-    const numAmount = parseFloat(reqBody.amount || "199");
-    const clientTxnId = `ORD_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-
-    const payload = {
-      key: apiKey,
-      client_txn_id: clientTxnId,
-      amount: numAmount,
-      p_info: "Telegram VIP Access",
-      customer_name: "Member",
-      customer_email: "support@telegram.com",
-      customer_mobile: "9876543210",
-      callback_url: "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/webhook",
-      redirect_url: "https://t.me",
-      udf1: "vip_access"
-    };
-
-    const vyaparRes = await fetch("https://vyapargateway.com/api/v1/create_order", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": apiKey
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const vyaparData = await vyaparRes.json();
-    console.log("Vyapar Response Data:", JSON.stringify(vyaparData));
-
-    if (vyaparData?.status === true && vyaparData?.data) {
-      // Base64 QR அல்லது நேரடி Standard UPI QR Server
-      let finalQr = vyaparData.data.qr_code;
-      if (!finalQr && vyaparData.data.upi_string) {
-        finalQr = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(vyaparData.data.upi_string)}`;
+      if (error || !data) {
+        return new Response(
+          JSON.stringify({ success: false, status: "pending" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       return new Response(
         JSON.stringify({
           success: true,
-          orderId: vyaparData.data.order_id,
-          clientTxnId: clientTxnId,
-          qrCode: finalQr,
-          upiString: vyaparData.data.upi_string,
-          upiIntent: vyaparData.data.upi_intent
+          status: data.status,
+          invite_link: data.telegram_link
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    } else {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: vyaparData?.msg || "Gateway Error",
-          detail: vyaparData
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-      );
     }
+
+    // --- 2. CREATE ORDER API (புதிய QR Code உருவாக்க) ---
+    // Frontend அனுப்பும் TXN ID-ஐப் பெறுதல்
+    const clientTxnId = reqBody.clientTxnId || `TXN_${Date.now()}`;
+    const numAmount = parseFloat(reqBody.amount || "199");
+
+    // டேட்டாபேஸில் புதிய ஆர்டரைச் சேமித்தல் (முக்கியமான படி)
+    const { error: insertError } = await supabase
+      .from('orders')
+      .insert([
+        {
+          order_id: clientTxnId,
+          amount: numAmount,
+          status: 'pending'
+        }
+      ]);
+
+    if (insertError) {
+      throw new Error("Failed to save order to database");
+    }
+
+    // நேரடியான UPI லிங்க் உருவாக்குதல் (Vyapar தேவையில்லை)
+    // குறிப்பு: உங்கள் HTML-ல் உள்ள அதே Paytm UPI ID இங்கே கொடுக்கப்பட்டுள்ளது
+    const upiId = "paytmqr281005050101v4jfqfl7j94m@paytm"; 
+    const upiString = `upi://pay?pa=${upiId}&pn=IndhujaOnline&am=${numAmount}&cu=INR&tr=${clientTxnId}&tn=VIP%20Access`;
+    const qrCode = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=4&data=${encodeURIComponent(upiString)}`;
+
+    // Frontend-க்கு வெற்றியான தகவலை அனுப்புதல்
+    return new Response(
+      JSON.stringify({
+        success: true,
+        orderId: clientTxnId,
+        clientTxnId: clientTxnId,
+        qrCode: qrCode,
+        upiString: upiString
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (error: any) {
     return new Response(
