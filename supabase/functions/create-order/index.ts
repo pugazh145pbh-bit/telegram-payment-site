@@ -1,14 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// CORS Headers - Frontend எந்த தடையுமின்றி API-ஐ அழைக்க இது அவசியம்
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const MERCHANT_UPI = "paytmqr281005050101v4jfqfl7j94m@paytm";
+const MERCHANT_NAME = "Indhuja Online";
+
 serve(async (req) => {
-  // CORS Preflight Request கையாளுதல்
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -21,206 +22,79 @@ serve(async (req) => {
       reqBody = {};
     }
 
-    // சுபாபேஸ் (Supabase) பாதுகாப்பான இணைப்பு அமைத்தல்
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // ==========================================
-    // 1. STATUS CHECK API (Frontend Polling-க்கு)
-    // ==========================================
+    // 1. Status Check Route (Frontend Polling மூலமாக டேட்டாபேஸைச் சரிபார்க்க)
     if (reqBody.action === "check_status" && (reqBody.order_id || reqBody.client_txn_id)) {
       const searchId = reqBody.order_id || reqBody.client_txn_id;
 
       const { data, error } = await supabase
-        .from('orders')
-        .select('status, telegram_link')
-        .eq('order_id', searchId)
-        .single();
+        .from("orders")
+        .select("status, telegram_link")
+        .eq("order_id", searchId)
+        .maybeSingle();
 
-      // ஆர்டர் கிடைக்கவில்லை என்றாலோ, எரர் வந்தாலோ 'pending' என அனுப்புவோம்
       if (error || !data) {
         return new Response(
-          JSON.stringify({ success: false, status: "pending" }),
+          JSON.stringify({ success: true, status: "pending", invite_link: null }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // பேமெண்ட் வெற்றி பெற்று 'paid' என மாறியிருந்தால் லிங்க்கை அனுப்புவோம்
+      const isSuccess = data.status === "paid" || data.status === "success";
+
       return new Response(
         JSON.stringify({
           success: true,
-          status: data.status,
-          invite_link: data.telegram_link
+          status: isSuccess ? "success" : "pending",
+          invite_link: isSuccess ? data.telegram_link : null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ==========================================
-    // 2. CREATE ORDER API (புதிய QR Code உருவாக்க)
-    // ==========================================
-    
-    // --- இங்குதான் பிழை சரிசெய்யப்பட்டுள்ளது ---
-    // Frontend-ல் இருந்து வரும் `clientTxnId`-ஐ மட்டும் தான் பயன்படுத்த வேண்டும். 
-    // புதிதாக நாமாக ஒன்றை உருவாக்கக் கூடாது.
-    const clientTxnId = reqBody.clientTxnId;
-    const numAmount = parseFloat(reqBody.amount || "199");
-
-    if (!clientTxnId) {
-       throw new Error("clientTxnId is missing from frontend request");
-    }
-
-    // டேட்டாபேஸில் புதிய ஆர்டரைச் 'pending' எனச் சேமித்தல்
-    const { error: insertError } = await supabase
-      .from('orders')
-      .insert([
-        {
-          order_id: clientTxnId,
-          amount: numAmount,
-          status: 'pending'
-        }
-      ]);
-
-    if (insertError) {
-      console.error("Database Insert Error:", insertError);
-      throw new Error("Failed to save order to database");
-    }
-
-    // நேரடியான UPI லிங்க் உருவாக்குதல் (Third-party Gateway தேவையில்லை)
-    const upiId = "paytmqr281005050101v4jfqfl7j94m@paytm"; 
-    const upiString = `upi://pay?pa=${upiId}&pn=IndhujaOnline&am=${numAmount}&cu=INR&tr=${clientTxnId}&tn=VIP%20Access`;
-    
-    // QR Code Image URL (Google API or QRServer)
-    const qrCode = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=4&data=${encodeURIComponent(upiString)}`;
-
-    // Frontend-க்கு வெற்றியான தகவலை (QR Code & UPI String) அனுப்புதல்
-    return new Response(
-      JSON.stringify({
-        success: true,
-        orderId: clientTxnId,
-        clientTxnId: clientTxnId,
-        qrCode: qrCode,
-        upiString: upiString
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
-  } catch (error: any) {
-    console.error("Create Order Error:", error.message);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-    );
-  }
-});import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-// CORS Headers - Frontend எந்த தடையுமின்றி API-ஐ அழைக்க இது அவசியம்
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-serve(async (req) => {
-  // CORS Preflight Request கையாளுதல்
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  try {
-    let reqBody: any = {};
-    try {
-      reqBody = await req.json();
-    } catch {
-      reqBody = {};
-    }
-
-    // சுபாபேஸ் (Supabase) பாதுகாப்பான இணைப்பு அமைத்தல்
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // ==========================================
-    // 1. STATUS CHECK API (Frontend Polling-க்கு)
-    // ==========================================
-    if (reqBody.action === "check_status" && (reqBody.order_id || reqBody.client_txn_id)) {
-      const searchId = reqBody.order_id || reqBody.client_txn_id;
-
-      const { data, error } = await supabase
-        .from('orders')
-        .select('status, telegram_link')
-        .eq('order_id', searchId)
-        .single();
-
-      // ஆர்டர் கிடைக்கவில்லை என்றாலோ, எரர் வந்தாலோ 'pending' என அனுப்புவோம்
-      if (error || !data) {
-        return new Response(
-          JSON.stringify({ success: false, status: "pending" }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // பேமெண்ட் வெற்றி பெற்று 'paid' என மாறியிருந்தால் லிங்க்கை அனுப்புவோம்
-      return new Response(
-        JSON.stringify({
-          success: true,
-          status: data.status,
-          invite_link: data.telegram_link
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ==========================================
-    // 2. CREATE ORDER API (புதிய QR Code உருவாக்க)
-    // ==========================================
-    
-    // --- இங்குதான் பிழை சரிசெய்யப்பட்டுள்ளது ---
-    // Frontend-ல் இருந்து வரும் `clientTxnId`-ஐ மட்டும் தான் பயன்படுத்த வேண்டும். 
-    // புதிதாக நாமாக ஒன்றை உருவாக்கக் கூடாது.
-    const clientTxnId = reqBody.clientTxnId;
+    // 2. Create Order Route (ஆர்டரை டேட்டாபேஸில் பதிவு செய்து NPCI QR உருவாக்குதல்)
     const numAmount = parseFloat(reqBody.amount || "1.00");
+    const clientTxnId =
+      reqBody.clientTxnId || `ORD_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
 
-    if (!clientTxnId) {
-       throw new Error("clientTxnId is missing from frontend request");
-    }
-
-    // டேட்டாபேஸில் புதிய ஆர்டரைச் 'pending' எனச் சேமித்தல்
-    const { error: insertError } = await supabase
-      .from('orders')
-      .insert([
-        {
-          order_id: clientTxnId,
-          amount: numAmount,
-          status: 'pending'
-        }
-      ]);
+    // Supabase டேட்டாபேஸில் pending ஆர்டராகச் சேமித்தல்
+    const { error: insertError } = await supabase.from("orders").insert([
+      {
+        order_id: clientTxnId,
+        amount: numAmount,
+        status: "pending",
+      },
+    ]);
 
     if (insertError) {
       console.error("Database Insert Error:", insertError);
-      throw new Error("Failed to save order to database");
+      throw new Error("Failed to insert pending order into Supabase");
     }
 
-    // நேரடியான UPI லிங்க் உருவாக்குதல் (Third-party Gateway தேவையில்லை)
-    const upiId = "paytmqr281005050101v4jfqfl7j94m@paytm"; 
-    const upiString = `upi://pay?pa=${upiId}&pn=IndhujaOnline&am=${numAmount}&cu=INR&tr=${clientTxnId}&tn=VIP%20Access`;
-    
-    // QR Code Image URL (Google API or QRServer)
-    const qrCode = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=4&data=${encodeURIComponent(upiString)}`;
+    // NPCI அங்கீகரிக்கப்பட்ட UPI QR String
+    const standardUpiString = `upi://pay?pa=${MERCHANT_UPI}&pn=${encodeURIComponent(
+      MERCHANT_NAME
+    )}&am=${numAmount.toFixed(2)}&cu=INR&tr=${clientTxnId}&tn=${encodeURIComponent(
+      "VIP Group Access"
+    )}`;
 
-    // Frontend-க்கு வெற்றியான தகவலை (QR Code & UPI String) அனுப்புதல்
+    const standardQrCode = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=4&data=${encodeURIComponent(
+      standardUpiString
+    )}`;
+
     return new Response(
       JSON.stringify({
         success: true,
         orderId: clientTxnId,
         clientTxnId: clientTxnId,
-        qrCode: qrCode,
-        upiString: upiString
+        qrCode: standardQrCode,
+        upiString: standardUpiString,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-
   } catch (error: any) {
     console.error("Create Order Error:", error.message);
     return new Response(
