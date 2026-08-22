@@ -792,7 +792,7 @@
             </div>
             <div class="timer-text">
                 <h4>SPECIAL PRICE<br>ENDS IN</h4>
-                <p>Save 83% • <s>₹899</s></p>
+                <p>Save 99% • <s>₹899</s></p>
             </div>
         </div>
         <div class="timer-right">
@@ -867,8 +867,8 @@
                     <div class="price-row">
                         <span class="price-old">₹899</span>
                         <div class="price-new-container">
-                            <span class="price-new" id="dynamicPrice">₹899</span>
-                            <span class="discount-badge">83% OFF</span>
+                            <span class="price-new" id="dynamicPrice">₹1</span>
+                            <span class="discount-badge">99% OFF</span>
                         </div>
                     </div>
                 </div>
@@ -1055,13 +1055,13 @@
 
 <script>
 (() => {
-    // --- 1. Instant Smooth Price Countdown (899 -> 199) ---
+    // --- 1. Instant Smooth Price Countdown (899 -> 1) ---
     function startPriceCountdown() {
         const priceElements = document.querySelectorAll('#dynamicPrice, .price-new');
         if (!priceElements.length) return;
 
         const startPrice = 899;
-        const endPrice = 199;
+        const endPrice = 1;
         const duration = 1400;
         const startTime = performance.now();
 
@@ -1124,7 +1124,7 @@
     startLoopTimer();
 
     // --- 3. Gateway & Secure Telegram Integration ---
-    const BASE_AMOUNT = 199.00;
+    const BASE_AMOUNT = 1.00;
     const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
     const getSecureTarget = () => atob("aHR0cHM6Ly90Lm1lLytxUFhuTW5TUmxKTmlaV0kx");
 
