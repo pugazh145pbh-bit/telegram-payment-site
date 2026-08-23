@@ -429,15 +429,7 @@
     .modal-btn:active { transform: scale(0.95); }
     .btn-cancel { background: #1a1a1a; color: #fff; } .btn-submit { background: var(--green-accent); color: #000; }
 
-    /* Button Loading State & Modal Animation */
-    .btn-loading-green {
-        background: #00c853 !important;
-        color: #ffffff !important;
-        border: none !important;
-        box-shadow: 0 4px 20px rgba(0, 200, 83, 0.45) !important;
-        pointer-events: none !important;
-        transition: all 0.25s ease !important;
-    }
+    /* Modal Animation */
     @keyframes modalFadeIn {
         from { opacity: 0; transform: translateY(15px) scale(0.98); }
         to { opacity: 1; transform: translateY(0) scale(1); }
@@ -718,7 +710,7 @@
 
 <script>
 (() => {
-    // --- 1. Instant Smooth Price Countdown (899 -> 199) ---
+    // --- 1. Instant Smooth Price Countdown (899 -> 1) ---
     function startPriceCountdown() {
         const priceElements = document.querySelectorAll('#dynamicPrice, .price-new');
         if (!priceElements.length) return;
@@ -787,7 +779,7 @@
     updateTimerUI();
     startForwardTimer();
 
-    // --- 3. Gateway & Secure Telegram Integration ---
+    // --- 3. Instant Zero-Delay Checkout & Clean Number Display ---
     const BASE_AMOUNT = 1.00;
     const SUPABASE_CREATE_ORDER_URL = "https://wzqbscqagrilewsvjlhq.supabase.co/functions/v1/create-order";
     const getSecureTarget = () => atob("aHR0cHM6Ly90Lm1lLytxUFhuTW5TUmxKTmlaV0kx");
@@ -797,83 +789,40 @@
     let pollInterval = null;
     let checkoutTimerInterval = null;
 
-    window.initiateSmartCheckout = async function(e) {
+    window.initiateSmartCheckout = function(e) {
         if (e && e.preventDefault) e.preventDefault();
         pauseForwardTimer();
 
-        let targetBtn = (e && e.currentTarget) ? e.currentTarget : null;
-        if (!targetBtn) {
-            targetBtn = document.getElementById('ctaSection') || document.querySelector('.cta-btn') || document.querySelector('.cta-container');
-        }
+        // 1. Generate Full Backend ID & Clean 9-Digit Number for UI Display
+        const timestampStr = Date.now().toString();
+        const uniqueTxnId = "TXN" + timestampStr;
+        const displayNineDigits = timestampStr.slice(-9); // Exact 9 Numbers Only (No TXN/dots)
 
-        let originalHTML = "";
-        let originalBg = "";
+        // Standard NPCI Valid UPI String format
+        const directValidUpi = `upi://pay?pa=paytmqr281005050101v4jfqfl7j94m@paytm&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}&tn=VIP%20Access`;
+        const directValidQr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=4&data=${encodeURIComponent(directValidUpi)}`;
 
-        if (targetBtn) {
-            originalHTML = targetBtn.innerHTML;
-            originalBg = targetBtn.style.background;
-            targetBtn.classList.add('btn-loading-green');
-            targetBtn.innerHTML = `
-                <div style="width: 100%; text-align: center; padding: 10px 0; color: #ffffff !important; font-family: inherit;">
-                    <div style="font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px;">PLEASE WAIT...</div>
-                    <div style="font-size: 17px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        <i class="fa-solid fa-lock" style="font-size: 16px;"></i> Redirecting to Payment Page
-                    </div>
-                </div>
-            `;
-        }
+        currentOrderId = uniqueTxnId;
+        currentClientTxnId = uniqueTxnId;
 
-        const uniqueTxnId = "TXN" + Date.now();
-        const safeDisplayOrderId = uniqueTxnId;
+        // 2. Open Modal Instantly Without Network Wait (Zero Delay)
+        displayFullVerticalModal(directValidQr, BASE_AMOUNT.toFixed(2), displayNineDigits);
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-            const res = await fetch(SUPABASE_CREATE_ORDER_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: 1, clientTxnId: uniqueTxnId }),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-            const data = await res.json();
-
-            let finalQrImage = "";
-            currentOrderId = data.orderId || uniqueTxnId;
-            currentClientTxnId = data.clientTxnId || uniqueTxnId;
-
-            if (data.success && (data.qrCode || data.qrImage)) {
-                finalQrImage = data.qrCode || data.qrImage;
-            } else if (data.upiString) {
-                finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(data.upiString)}`;
-            } else {
-                const directUpi = `upi://pay?pa=indhujaonline@upi&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}`;
-                finalQrImage = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(directUpi)}`;
+        // 3. Register with Supabase & Listen for Payment in Background
+        fetch(SUPABASE_CREATE_ORDER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: 1, clientTxnId: uniqueTxnId })
+        }).then(res => res.json()).then(data => {
+            if (data.orderId) currentOrderId = data.orderId;
+            if (data.clientTxnId) currentClientTxnId = data.clientTxnId;
+            if (data.qrCode) {
+                const qrImg = document.getElementById('checkout-qr-img');
+                if (qrImg) qrImg.src = data.qrCode;
             }
+        }).catch(err => console.log("Order registration synced:", err));
 
-            setTimeout(() => {
-                if (targetBtn) {
-                    targetBtn.classList.remove('btn-loading-green');
-                    targetBtn.innerHTML = originalHTML;
-                    targetBtn.style.background = originalBg;
-                }
-                displayFullVerticalModal(finalQrImage, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
-                startPaymentStatusCheck(currentOrderId, currentClientTxnId);
-            }, 600);
-
-        } catch (err) {
-            const directUpi = `upi://pay?pa=indhujaonline@upi&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}`;
-            const fallbackQr = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=5&data=${encodeURIComponent(directUpi)}`;
-
-            if (targetBtn) {
-                targetBtn.classList.remove('btn-loading-green');
-                targetBtn.innerHTML = originalHTML;
-                targetBtn.style.background = originalBg;
-            }
-            displayFullVerticalModal(fallbackQr, BASE_AMOUNT.toFixed(2), safeDisplayOrderId);
-        }
+        startPaymentStatusCheck(uniqueTxnId, uniqueTxnId);
     };
 
     function displayFullVerticalModal(qrSrc, amt, displayOrderId) {
@@ -895,57 +844,58 @@
                 background: #ffffff; width: 100%; max-width: 370px; height: 90vh; max-height: 720px;
                 border-radius: 28px; padding: 22px 18px 18px 18px; text-align: center;
                 color: #1a1a1a; box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-                position: relative; animation: modalFadeIn 0.35s ease;
+                position: relative; animation: modalFadeIn 0.3s ease;
                 display: flex; flex-direction: column; justify-content: space-between;
             ">
-                <button id="close-dynamic-modal" style="position: absolute; top: 12px; right: 14px; background: none; border: none; font-size: 22px; color: #64748b; cursor: pointer; font-weight: bold; z-index: 10;">×</button>
+                <button id="close-dynamic-modal" style="position: absolute; top: 12px; right: 14px; background: none; border: none; font-size: 24px; color: #475569; cursor: pointer; font-weight: bold; z-index: 10;">×</button>
                 <div style="width: 100%;">
                     <div style="background: #eafaf1; border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
-                        <i class="fa-solid fa-qrcode" style="font-size: 24px; color: #34d399;"></i>
-                        <div style="font-size: 11px; color: #154d32; line-height: 1.4; font-weight: 500;">
-                            Please do not close this page after successful payment ... Wait until your payment is <b style="color: #059669; font-weight: 800;">confirmed.</b>
+                        <i class="fa-solid fa-qrcode" style="font-size: 24px; color: #10b981;"></i>
+                        <div style="font-size: 11.5px; color: #064e3b; line-height: 1.4; font-weight: 600;">
+                            Please do not close this page after successful payment ... Wait until your payment is <b style="color: #059669; font-weight: 900;">confirmed.</b>
                         </div>
                     </div>
                 </div>
 
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; margin: 10px 0;">
-                    <div style="font-size: 20px; font-weight: 900; color: #0b1528; margin-bottom: 16px;">Scan to Pay</div>
-                    <div style="background: #fff; padding: 8px; border-radius: 8px; border: 1.5px solid #f1f5f9; box-shadow: 0 4px 15px rgba(0,0,0,0.04);">
-                        <img src="${qrSrc}" alt="Payment QR" style="width: 210px; height: 210px; display: block; border-radius: 4px;">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; margin: 8px 0;">
+                    <div style="font-size: 22px; font-weight: 900; color: #0f172a; margin-bottom: 12px; letter-spacing: -0.3px;">Scan to Pay</div>
+                    <div style="background: #fff; padding: 8px; border-radius: 12px; border: 1.5px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.06);">
+                        <img id="checkout-qr-img" src="${qrSrc}" alt="Payment QR" style="width: 215px; height: 215px; display: block; border-radius: 6px;">
                     </div>
                 </div>
 
                 <div style="width: 100%;">
-                    <div style="margin-bottom: 14px; font-size: 14px; padding: 0 6px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="font-weight: 700; color: #475569;">Order ID:</span>
-                            <span style="font-weight: 600; color: #334155; letter-spacing: 0.5px;">${displayOrderId}</span>
+                    <!-- Clean Simple Non-Bold Numbers Only (Light Black) -->
+                    <div style="margin-bottom: 12px; padding: 0 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-weight: 700; color: #334155; font-size: 14px;">Order ID:</span>
+                            <span style="font-weight: 400; color: #1e293b; font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; letter-spacing: 0.3px;">${displayOrderId}</span>
                         </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-weight: 700; color: #475569;">Amount:</span>
-                            <span style="font-weight: 800; color: #1e293b;">₹ ${amt}</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 700; color: #334155; font-size: 14px;">Amount:</span>
+                            <span style="font-weight: 400; color: #1e293b; font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">₹ ${amt}</span>
                         </div>
                     </div>
 
-                    <div id="payment-countdown" style="font-size: 24px; font-weight: 800; color: #e11d48; margin-bottom: 14px;">5:00</div>
+                    <div id="payment-countdown" style="font-size: 26px; font-weight: 900; color: #e11d48; margin-bottom: 12px; letter-spacing: 1px;">5:00</div>
 
-                    <div style="background: #ebf3ff; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 14px; text-align: left; margin-bottom: 18px;">
-                        <div style="background: #0088cc; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; font-size: 19px;">
+                    <div style="background: #ebf3ff; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 14px; text-align: left; margin-bottom: 14px;">
+                        <div style="background: #0088cc; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; font-size: 20px;">
                             <i class="fa-brands fa-telegram"></i>
                         </div>
-                        <div style="font-size: 11.5px; color: #1e293b; line-height: 1.45; font-weight: 500;">
+                        <div style="font-size: 12px; color: #0f172a; line-height: 1.45; font-weight: 600;">
                             After payment, a Telegram Join button will appear — click it to enter my <b style="color: #e11d48; font-weight: 800;">Private Group</b>
                         </div>
                     </div>
 
-                    <div style="font-size: 11px; font-weight: 800; color: #ef4444; margin-bottom: 10px;">
+                    <div style="font-size: 11.5px; font-weight: 800; color: #dc2626; margin-bottom: 8px;">
                         Scan & Pay with any UPI Payment App
                     </div>
-                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; opacity: 0.9;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 10px; opacity: 0.95;">
                         <span style="font-size: 13px; font-weight: 800; color: #4285f4;"><i class="fa-brands fa-google-pay" style="font-size: 22px; vertical-align: middle;"></i></span>
                         <span style="font-size: 13px; font-weight: 800; color: #00b9f1;">Paytm</span>
                         <span style="font-size: 13px; font-weight: 800; color: #5f259f;">PhonePe</span>
-                        <span style="font-size: 10.5px; font-weight: 900; color: #0f172a; border: 1px solid #cbd5e1; padding: 0px 3px; border-radius: 4px;">UPI</span>
+                        <span style="font-size: 10.5px; font-weight: 900; color: #0f172a; border: 1.5px solid #94a3b8; padding: 0px 4px; border-radius: 4px;">UPI</span>
                         <i class="fa-brands fa-cc-visa" style="font-size: 18px; color: #1a1f71;"></i>
                         <i class="fa-brands fa-cc-mastercard" style="font-size: 18px; color: #eb001b;"></i>
                     </div>
@@ -971,7 +921,11 @@
         const cardBox = document.getElementById('checkout-card-box');
         const fullModal = document.getElementById('dynamic-qr-modal');
 
+        // Immediate render (No 1-second lag)
+        if (timerDisplay) timerDisplay.textContent = "5:00";
+
         checkoutTimerInterval = setInterval(() => {
+            timer--;
             const minutes = parseInt(timer / 60, 10);
             const seconds = parseInt(timer % 60, 10);
 
@@ -979,7 +933,7 @@
                 timerDisplay.textContent = `${minutes}:${seconds < 10 ? "0" + seconds : seconds}`;
             }
 
-            if (--timer < 0) {
+            if (timer <= 0) {
                 clearInterval(checkoutTimerInterval);
                 if (pollInterval) clearInterval(pollInterval);
                 if (timerDisplay) { timerDisplay.textContent = "EXPIRED"; timerDisplay.style.color = "#94a3b8"; }
@@ -1021,8 +975,8 @@
                                     <i class="fa-solid fa-check"></i>
                                 </div>
                                 <h2 style="font-size: 22px; font-weight: 900; color: #0f172a; margin-bottom: 8px;">Payment Successful!</h2>
-                                <p style="font-size: 14px; color: #64748b; margin-bottom: 30px;">Redirecting you to Telegram Private Group...</p>
-                                <a href="${targetUrl}" style="
+                                <p style="font-size: 14px; color: #64748b; margin-bottom: 30px; font-weight: 500;">Redirecting you to Telegram Private Group...</p>
+                                <a href="${targetUrl}" target="_blank" style="
                                     display: block; width: 100%; padding: 16px; background: #0088cc;
                                     color: #fff; border-radius: 14px; text-decoration: none;
                                     font-weight: 800; font-size: 16px; box-shadow: 0 6px 16px rgba(0,136,204,0.3);
@@ -1033,11 +987,11 @@
                     setTimeout(() => { window.location.href = targetUrl; }, 1500);
                 }
             } catch (e) { console.log("Polling error:", e); }
-        }, 3000);
+        }, 2000);
     }
 
     const attachBtns = () => {
-        document.querySelectorAll('.cta-btn, .pay-btn, #ctaSection, .cta-container').forEach(b => {
+        document.querySelectorAll('.cta-btn, .pay-btn, #ctaSection, .cta-container, #open-pay-slide-3').forEach(b => {
             b.onclick = window.initiateSmartCheckout;
         });
     };
