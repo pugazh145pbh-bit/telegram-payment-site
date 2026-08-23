@@ -119,38 +119,30 @@ Deno.serve(async (req) => {
     // Telegram One-Time Invite Link Generation
     const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
     const chatId = Deno.env.get("TELEGRAM_CHANNEL_ID");
+    let inviteLink = "https://t.me/+qPXnMnSRlJNiZWI1";
 
-    if (!botToken || !chatId) {
-      throw new Error("Telegram Bot credentials are missing");
-    }
-
-    let inviteLink = "";
-
-    try {
-      const tgRes = await fetch(
-        `https://api.telegram.org/bot${botToken}/createChatInviteLink`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            member_limit: 1,
-            expire_date: Math.floor(Date.now() / 1000) + 1800,
-            name: `VIP_${orderId}`,
-          }),
+    if (botToken && chatId) {
+      try {
+        const tgRes = await fetch(
+          `https://api.telegram.org/bot${botToken}/createChatInviteLink`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              member_limit: 1,
+              expire_date: Math.floor(Date.now() / 1000) + 1800,
+              name: `VIP_${orderId}`,
+            }),
+          }
+        );
+        const tgData = await tgRes.json();
+        if (tgData.result?.invite_link) {
+          inviteLink = tgData.result.invite_link;
         }
-      );
-
-      const tgData = await tgRes.json();
-      if (!tgData.ok || !tgData.result?.invite_link) {
-        console.error("Telegram API Error Details:", tgData);
-        throw new Error("Telegram failed to generate single-use invite link");
+      } catch (err: any) {
+        console.error("Telegram API Error:", err.message);
       }
-
-      inviteLink = tgData.result.invite_link;
-    } catch (err: any) {
-      console.error("Telegram API Error:", err.message);
-      throw err;
     }
 
     // 6. Supabase Database-ல் 'paid' என மாற்றுதல்
