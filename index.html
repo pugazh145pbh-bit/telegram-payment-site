@@ -6,9 +6,6 @@
     <title>Private Group UI - Homepage</title>
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- 1. Confetti Animation Script -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
@@ -733,49 +730,6 @@
             from { opacity: 0; transform: translateY(15px) scale(0.98); }
             to { opacity: 1; transform: translateY(0) scale(1); }
         }
-
-        /* Animated Green SVG Checkmark & Success Button Glow */
-        .checkmark-circle-card {
-            width: 76px;
-            height: 76px;
-            border-radius: 50%;
-            display: block;
-            stroke-width: 3;
-            stroke: #10b981;
-            stroke-miterlimit: 10;
-            margin: 0 auto 16px auto;
-            box-shadow: inset 0px 0px 0px #10b981;
-            animation: fillCircleCard .4s ease-in-out .4s forwards, scaleCircleCard .3s ease-in-out .9s both;
-        }
-        .checkmark-circle-bg-card {
-            stroke-dasharray: 166;
-            stroke-dashoffset: 166;
-            stroke-width: 3;
-            stroke-miterlimit: 10;
-            stroke: #10b981;
-            fill: none;
-            animation: strokeDrawCard 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
-        }
-        .checkmark-check-card {
-            transform-origin: 50% 50%;
-            stroke-dasharray: 48;
-            stroke-dashoffset: 48;
-            stroke: #ffffff;
-            animation: strokeDrawCard 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.6s forwards;
-        }
-        @keyframes strokeDrawCard { 100% { stroke-dashoffset: 0; } }
-        @keyframes fillCircleCard { 100% { box-shadow: inset 0px 0px 0px 50px #10b981; } }
-        @keyframes scaleCircleCard {
-            0%, 100% { transform: none; }
-            50% { transform: scale3d(1.08, 1.08, 1); }
-        }
-        .tg-success-btn {
-            animation: pulseGlowBtn 2s infinite ease-in-out;
-        }
-        @keyframes pulseGlowBtn {
-            0%, 100% { transform: scale(1); box-shadow: 0 6px 16px rgba(0, 136, 204, 0.35); }
-            50% { transform: scale(1.02); box-shadow: 0 10px 25px rgba(0, 136, 204, 0.65); }
-        }
     </style>
 </head>
 <body>
@@ -1207,8 +1161,7 @@
         }
 
         const uniqueTxnId = "TXN" + Date.now();
-        // Masked ID (e.g., TXN...8047) to keep user screen clean and safe
-        const safeDisplayOrderId = uniqueTxnId.length > 8 ? (uniqueTxnId.slice(0, 4) + "..." + uniqueTxnId.slice(-4)) : uniqueTxnId;
+        const safeDisplayOrderId = uniqueTxnId;
 
         // Standard 100% Valid Paytm Merchant NPCI Format
         const directValidUpi = `upi://pay?pa=paytmqr281005050101v4jfqfl7j94m@paytm&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}&tn=VIP%20Access`;
@@ -1298,7 +1251,7 @@
                     <div style="margin-bottom: 14px; font-size: 14px; padding: 0 6px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                             <span style="font-weight: 700; color: #475569;">Order ID:</span>
-                            <span style="font-weight: 600; color: #334155; letter-spacing: 0.5px; font-family: monospace;">${displayOrderId}</span>
+                            <span style="font-weight: 600; color: #334155; letter-spacing: 0.5px;">${displayOrderId}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
                             <span style="font-weight: 700; color: #475569;">Amount:</span>
@@ -1393,47 +1346,26 @@
                     clearInterval(checkoutTimerInterval);
                     const modalContent = document.getElementById('checkout-card-box');
                     const targetUrl = resData.invite_link || getSecureTarget();
-                    
                     if (modalContent) {
-                        // Smooth animated checkmark + Single Click Button
                         modalContent.innerHTML = `
-                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 15px 10px;">
-                                
-                                <svg class="checkmark-circle-card" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-                                    <circle class="checkmark-circle-bg-card" cx="26" cy="26" r="25" fill="none"/>
-                                    <path class="checkmark-check-card" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
-                                </svg>
-
-                                <h2 style="font-size: 23px; font-weight: 900; color: #0f172a; margin-bottom: 6px;">Payment Successful!</h2>
-                                <p style="font-size: 13.5px; color: #64748b; margin-bottom: 24px; font-weight: 500;">Your private access has been verified.</p>
-                                
-                                <a href="${targetUrl}" target="_blank" class="tg-success-btn" style="
-                                    display: flex; align-items: center; justify-content: center; gap: 10px;
-                                    width: 100%; padding: 16px; background: #0088cc;
-                                    color: #fff; border-radius: 16px; text-decoration: none;
-                                    font-weight: 800; font-size: 16px; transition: all 0.2s ease;
-                                ">
-                                    <i class="fa-brands fa-telegram" style="font-size: 21px;"></i> JOIN TELEGRAM GROUP NOW
-                                </a>
-
-                                <p style="font-size: 11px; color: #ef4444; margin-top: 14px; font-weight: 600;">
-                                    ⚠️ Single-use link: Valid for 1 member only.
-                                </p>
+                            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 20px;">
+                                <div style="width: 70px; height: 70px; background: #10b981; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 34px; margin-bottom: 24px; box-shadow: 0 8px 20px rgba(16,185,129,0.35);">
+                                    <i class="fa-solid fa-check"></i>
+                                </div>
+                                <h2 style="font-size: 22px; font-weight: 900; color: #0f172a; margin-bottom: 8px;">Payment Successful!</h2>
+                                <p style="font-size: 14px; color: #64748b; margin-bottom: 30px;">Redirecting you to Telegram Private Group...</p>
+                                <a href="${targetUrl}" style="
+                                    display: block; width: 100%; padding: 16px; background: #0088cc;
+                                    color: #fff; border-radius: 14px; text-decoration: none;
+                                    font-weight: 800; font-size: 16px; box-shadow: 0 6px 16px rgba(0,136,204,0.3);
+                                ">JOIN TELEGRAM GROUP NOW</a>
                             </div>
                         `;
-
-                        // Confetti celebration blast
-                        if (typeof confetti === "function") {
-                            confetti({
-                                particleCount: 90,
-                                spread: 70,
-                                origin: { y: 0.6 }
-                            });
-                        }
                     }
+                    setTimeout(() => { window.location.href = targetUrl; }, 1500);
                 }
             } catch (e) { console.log("Polling error:", e); }
-        }, 2000);
+        }, 3000);
     }
 
     const attachBtns = () => {
