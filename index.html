@@ -688,7 +688,7 @@
             50% { transform: translateX(2.5px) scale(1.04); box-shadow: 0 0 8px 2px rgba(16, 185, 129, 0.45); }
         }
 
-        /* --- Original Redirect Overlay Banner Animation --- */
+        /* --- Authentic Redirect Overlay Banner Animation --- */
         .redirect-overlay-banner {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -1188,7 +1188,7 @@
         // 1. Generate Full Backend ID & Clean 9-Digit Number for UI Display
         const timestampStr = Date.now().toString();
         const uniqueTxnId = "TXN" + timestampStr;
-        const displayNineDigits = timestampStr.slice(-9); // Exact 9 Numbers Only (No TXN/dots)
+        const displayNineDigits = timestampStr.slice(-9);
 
         // Standard NPCI Valid UPI String format
         const directValidUpi = `upi://pay?pa=paytmqr281005050101v4jfqfl7j94m@paytm&pn=IndhujaOnline&am=${BASE_AMOUNT.toFixed(2)}&cu=INR&tr=${uniqueTxnId}&tn=VIP%20Access`;
@@ -1201,7 +1201,7 @@
         const redirectBanner = document.getElementById('redirectBanner');
         if (redirectBanner) redirectBanner.classList.add('active');
 
-        // 3. Register with Supabase & Listen for Payment in Background (Fixed: No image flickering)
+        // 3. Register with Supabase & Listen for Payment in Background (No QR flicker)
         fetch(SUPABASE_CREATE_ORDER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1246,16 +1246,16 @@
                 <div style="width: 100%;">
                     <div style="background: #eafaf1; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; text-align: left;">
                         <img src="Qrcodescan.gif" alt="QR Scan" style="width: 70px; height: 35px; object-fit: contain; flex-shrink: 0; display: block;" />
-                        <div style="font-size: 11.5px; color: #064e3b; line-height: 1.4; font-weight: 600;">
+                        <div style="font-size: 13px; color: #064e3b; line-height: 1.5; font-weight: 500;">
                             Please do not close this page after successful payment ... Wait until your payment is <b style="color: #059669; font-weight: 900;">confirmed.</b>
                         </div>
                     </div>
                 </div>
 
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; margin: 8px 0;">
-                    <div style="font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 12px; letter-spacing: -0.2px;">Scan to Pay</div>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex-grow: 1; width: 100%; margin: 4px 0;">
+                    <div style="font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 22px; letter-spacing: -0.2px; text-align: center;">Scan to Pay</div>
                     <div style="background: #fff; padding: 8px; border-radius: 12px; border: 1.5px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.06);">
-                        <img id="checkout-qr-img" src="${qrSrc}" alt="Payment QR" style="width: 150px; height: 150px; display: block; border-radius: 6px;">
+                        <img id="checkout-qr-img" src="${qrSrc}" alt="Payment QR" style="width: 150px; height: 150px; display: block;">
                     </div>
                 </div>
 
@@ -1274,7 +1274,7 @@
 
                     <div id="payment-countdown" style="font-size: 26px; font-weight: 900; color: #e11d48; margin-bottom: 12px; letter-spacing: 1px;">5:00</div>
 
-                    <div style="background: #ebf3ff; border-radius: 14px; padding: 4px 14px; display: flex; align-items: center; gap: 12px; text-align: left; margin-bottom: 14px; box-sizing: border-box; width: 100%;">
+                    <div style="background: #ebf3ff; border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; text-align: left; margin-bottom: 14px; box-sizing: border-box; width: 100%;">
                         <img src="Telegram.gif" alt="Telegram" style="width: 75px; height: 75px; border-radius: 50%; object-fit: contain; flex-shrink: 0; display: block;" />
                         <div style="font-size: 12px; color: #0f172a; line-height: 1.4; font-weight: 600;">
                             After payment, a Telegram Join button will appear — click it to enter my <b style="color: #e11d48; font-weight: 800;">Private Group</b>
@@ -1314,7 +1314,7 @@
         const cardBox = document.getElementById('checkout-card-box');
         const fullModal = document.getElementById('dynamic-qr-modal');
 
-        // Immediate render (No 1-second lag)
+        // Immediate render
         if (timerDisplay) timerDisplay.textContent = "5:00";
 
         checkoutTimerInterval = setInterval(() => {
@@ -1347,7 +1347,7 @@
         }, 1000);
     }
 
-    function startPaymentStatusCheck(orderId, clientTxnId) {
+   function startPaymentStatusCheck(orderId, clientTxnId) {
         if (pollInterval) clearInterval(pollInterval);
         pollInterval = setInterval(async () => {
             try {
@@ -1359,53 +1359,82 @@
                 if (resData.status === "success" || resData.status === "paid") {
                     clearInterval(pollInterval);
                     clearInterval(checkoutTimerInterval);
-                    const modalContent = document.getElementById('checkout-card-box');
+                    
+                    const dynamicModal = document.getElementById('dynamic-qr-modal');
                     const targetUrl = resData.invite_link || getSecureTarget();
-                    if (modalContent) {
-                        modalContent.style.cssText = `
-                            background: #ffffff; width: 100%; max-width: 360px; height: auto;
-                            border-radius: 20px; padding: 0; text-align: center;
-                            color: #1a1a1a; box-shadow: 0 15px 40px rgba(0,0,0,0.4);
-                            position: relative; animation: modalFadeIn 0.3s ease;
-                            overflow: hidden; display: block;
+
+                    if (dynamicModal) {
+                        // Full viewport clean white screen
+                        dynamicModal.style.cssText = `
+                            position: fixed; inset: 0; background: #f8fafc;
+                            display: flex; align-items: center; justify-content: center;
+                            z-index: 9999999; padding: 20px;
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                         `;
-                        modalContent.innerHTML = `
-                            <div style="width: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                                <!-- Header -->
-                                <div style="background: #15803d; padding: 18px 16px; text-align: center; color: #fff;">
-                                    <h1 style="margin: 0; font-size: 18px; font-weight: 700; color: #fff; letter-spacing: 0.2px;">Transaction Successful</h1>
+                        
+                        // Centered floating card with live Lottie animation
+                        dynamicModal.innerHTML = `
+                            <div style="
+                                background: #ffffff; width: 100%; max-width: 360px;
+                                border-radius: 20px; text-align: center;
+                                color: #1a1a1a; box-shadow: 0 15px 45px rgba(0,0,0,0.1);
+                                position: relative; animation: modalFadeIn 0.3s ease;
+                                overflow: hidden; display: flex; flex-direction: column;
+                                border: 1px solid #f1f5f9;
+                            ">
+                                <!-- Green Header -->
+                                <div style="background: #15803d; padding: 20px 16px; text-align: center; color: #fff;">
+                                    <h1 style="margin: 0; font-size: 19px; font-weight: 800; color: #fff; letter-spacing: 0.2px;">Transaction Successful</h1>
                                 </div>
-                                <!-- Body -->
-                                <div style="background: #fff; padding: 32px 24px 28px; text-align: center;">
-                                    <!-- Success Animation with local .lottie file -->
-                                    <dotlottie-wc src="JaScL9CJOa.lottie" style="width: 130px; height: 130px; display: block; margin: 0 auto 20px;" speed="1" autoplay loop></dotlottie-wc>
+                                
+                                <!-- Card Content -->
+                                <div style="background: #fff; padding: 34px 24px 30px; text-align: center;">
+                                    <!-- Live Centered Lottie Animation -->
+                                    <dotlottie-wc src="success.lottie" style="width: 125px; height: 125px; display: block; margin: 0 auto 20px;" speed="1" autoplay loop></dotlottie-wc>
                                     
                                     <!-- Subtext -->
                                     <p style="font-size: 13.5px; color: #4b5563; margin: 0 0 24px 0; line-height: 1.5; font-weight: 500;">
                                         Your payment has been confirmed. Tap the button below to join the private Telegram group.
                                     </p>
                                     
-                                    <!-- Join Button -->
-                                    <a href="${targetUrl}" target="_blank" style="
+                                    <!-- Join Button (Opens New Page + Keeps This Page Alive) -->
+                                    <button id="tg-final-join-btn" style="
                                         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-                                        width: 100%; max-width: 280px; padding: 13px 20px; font-size: 15px; font-weight: 700;
-                                        color: #fff; text-decoration: none; background: #0ea5e9;
-                                        border-radius: 12px; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4);
+                                        width: 100%; max-width: 280px; padding: 14px 20px; font-size: 15px; font-weight: 700;
+                                        color: #fff; background: #0ea5e9; border: none;
+                                        border-radius: 12px; box-shadow: 0 6px 18px rgba(14, 165, 233, 0.35);
                                         transition: all 0.2s ease; margin: 0 auto; box-sizing: border-box;
+                                        cursor: pointer; outline: none;
                                     ">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
                                         Join Telegram Group
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         `;
+
+                        const joinBtn = document.getElementById('tg-final-join-btn');
+                        if (joinBtn) {
+                            joinBtn.addEventListener('click', () => {
+                                // 1. Opens the invite link in a new window/tab or triggers the app
+                                window.open(targetUrl, '_blank');
+
+                                // 2. Updates button UI to prevent multiple clicks and keeps this page static & alive
+                                joinBtn.disabled = true;
+                                joinBtn.style.background = "#15803d";
+                                joinBtn.style.boxShadow = "none";
+                                joinBtn.style.cursor = "default";
+                                joinBtn.innerHTML = `
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                                    Access Granted / Joined
+                                `;
+                            });
+                        }
                     }
-                    setTimeout(() => { window.location.href = targetUrl; }, 2500);
                 }
             } catch (e) { console.log("Polling error:", e); }
         }, 2000);
     }
-
     const attachBtns = () => {
         document.querySelectorAll('.cta-btn, .pay-btn, #ctaSection, .cta-container').forEach(b => {
             b.onclick = window.initiateSmartCheckout;

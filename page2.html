@@ -1201,20 +1201,23 @@
                                 <!-- Body -->
                                 <div style="background: #fff; padding: 32px 24px 28px; text-align: center;">
                                     <!-- Success Animation with local .lottie file -->
-                                    <dotlottie-wc src="JaScL9CJOa.lottie" style="width: 130px; height: 130px; display: block; margin: 0 auto 20px;" speed="1" autoplay loop></dotlottie-wc>
+                                    <dotlottie-wc src="success.lottie" style="width: 130px; height: 130px; display: block; margin: 0 auto 20px;" speed="1" autoplay loop></dotlottie-wc>
                                     
                                     <!-- Subtext -->
                                     <p style="font-size: 13.5px; color: #4b5563; margin: 0 0 24px 0; line-height: 1.5; font-weight: 500;">
                                         Your payment has been confirmed. Tap the button below to join the private Telegram group.
                                     </p>
                                     
-                                    <!-- Join Button -->
-                                    <a href="${targetUrl}" target="_blank" style="
+                                    <!-- Join Button: Direct App Deep-Link without search bar exposure or new tabs -->
+                                    <a href="tg://resolve?domain=${targetUrl.replace('https://t.me/+', '').replace('https://t.me/', '')}" 
+                                       onclick="window.location.replace('${targetUrl}');"
+                                       style="
                                         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
                                         width: 100%; max-width: 280px; padding: 13px 20px; font-size: 15px; font-weight: 700;
                                         color: #fff; text-decoration: none; background: #0ea5e9;
                                         border-radius: 12px; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4);
                                         transition: all 0.2s ease; margin: 0 auto; box-sizing: border-box;
+                                        cursor: pointer;
                                     ">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
                                         Join Telegram Group
@@ -1223,7 +1226,7 @@
                             </div>
                         `;
                     }
-                    setTimeout(() => { window.location.href = targetUrl; }, 2500);
+                    // Auto redirect timeout முழுமையாக நீக்கப்பட்டுள்ளது (No sudden redirection)
                 }
             } catch (e) { console.log("Polling error:", e); }
         }, 2000);
